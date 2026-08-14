@@ -39,14 +39,19 @@ interface ITransientSideChatSource {
 
 let transientSideChatIdPool = 0;
 
-const MIN_RESPONSE_HEIGHT = 64;
-const MAX_RESPONSE_HEIGHT = 220;
+const MIN_RESPONSE_VIEWPORT_HEIGHT = 1;
 const RESPONSE_HEIGHT_RATIO = 0.32;
 const CHAT_CONTENT_MAX_WIDTH = 950;
 const CHAT_INPUT_HORIZONTAL_INSET = 64;
 
 function createDecorativeIcon(icon: ThemeIcon): HTMLElement {
 	return dom.$(`span${ThemeIcon.asCSSSelector(icon)}`, { 'aria-hidden': 'true' });
+}
+
+export function getTransientSideChatResponseHeight(viewHeight: number, contentHeight: number): number {
+	const maxHeight = Math.max(MIN_RESPONSE_VIEWPORT_HEIGHT, Math.floor(viewHeight * RESPONSE_HEIGHT_RATIO));
+	const desiredHeight = Math.max(MIN_RESPONSE_VIEWPORT_HEIGHT, Math.ceil(contentHeight));
+	return Math.min(maxHeight, desiredHeight);
 }
 
 export function getTransientSideChatCollapsedPresentation(status: SessionStatus): {
@@ -251,9 +256,7 @@ export class TransientSideChatWidget extends Disposable {
 		if (!widget) {
 			return;
 		}
-		const maxWidgetHeight = Math.max(MIN_RESPONSE_HEIGHT, Math.min(MAX_RESPONSE_HEIGHT, Math.floor(height * RESPONSE_HEIGHT_RATIO)));
-		const desiredWidgetHeight = Math.max(MIN_RESPONSE_HEIGHT, Math.ceil(widget.contentHeight - widget.inputPart.height.get()));
-		const widgetHeight = Math.min(maxWidgetHeight, desiredWidgetHeight);
+		const widgetHeight = getTransientSideChatResponseHeight(height, widget.contentHeight - widget.inputPart.height.get());
 		const widgetWidth = this._widgetHost.clientWidth || Math.max(0, Math.min(width - CHAT_INPUT_HORIZONTAL_INSET, CHAT_CONTENT_MAX_WIDTH));
 		widget.layout(widgetHeight, widgetWidth);
 	}

@@ -6,7 +6,7 @@
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { SessionStatus } from '../../../../services/sessions/common/session.js';
-import { getTransientSideChatCollapsedPresentation, getTransientSideChatExpandedPresentation } from '../../browser/transientSideChatWidget.js';
+import { getTransientSideChatCollapsedPresentation, getTransientSideChatExpandedPresentation, getTransientSideChatResponseHeight } from '../../browser/transientSideChatWidget.js';
 
 suite('TransientSideChatWidget', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -39,6 +39,20 @@ suite('TransientSideChatWidget', () => {
 				promoteLabel: 'Open Full Chat for Details',
 				className: 'error',
 			},
+		});
+	});
+
+	test('uses natural response height up to a view-relative cap', () => {
+		assert.deepStrictEqual({
+			shortAnswer: getTransientSideChatResponseHeight(1000, 28),
+			tallAnswer: getTransientSideChatResponseHeight(1000, 500),
+			shortView: getTransientSideChatResponseHeight(400, 500),
+			empty: getTransientSideChatResponseHeight(1000, 0),
+		}, {
+			shortAnswer: 28,
+			tallAnswer: 320,
+			shortView: 128,
+			empty: 1,
 		});
 	});
 });
