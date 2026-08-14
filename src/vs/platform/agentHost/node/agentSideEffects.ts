@@ -1588,7 +1588,7 @@ export class AgentSideEffects extends Disposable {
 				const attachments = action.message.attachments;
 				this._telemetryReporter.userMessageSent(agent.id, clientId, clientContext, channel, action.turnId, state, 'direct', attachments);
 				const { model, modelTelemetryKind, permissionLevel, interactionMode } = this._getTurnTelemetryContext(agent, state, action.message.model?.id);
-				this._turnTracker.turnStarted(agent.id, channel, action.turnId, model, modelTelemetryKind, permissionLevel, interactionMode);
+				this._turnTracker.turnStarted(agent.id, channel, action.turnId, clientContext.clientType, model, modelTelemetryKind, permissionLevel, interactionMode);
 				void this._sendTurnMessage({
 					agent,
 					sessionChannel,
@@ -2042,7 +2042,7 @@ export class AgentSideEffects extends Disposable {
 		const queuedState = this._stateManager.getSessionState(session);
 		this._telemetryReporter.userMessageSent(agent.id, sender.clientId, sender.clientContext, session, turnId, queuedState, 'queued', attachments);
 		const { model, modelTelemetryKind, permissionLevel, interactionMode } = this._getTurnTelemetryContext(agent, queuedState, msg.message.model?.id);
-		this._turnTracker.turnStarted(agent.id, session, turnId, model, modelTelemetryKind, permissionLevel, interactionMode);
+		this._turnTracker.turnStarted(agent.id, session, turnId, sender.clientContext.clientType, model, modelTelemetryKind, permissionLevel, interactionMode);
 		// Selection travels on the queued message; it is applied before sending.
 		void this._sendTurnMessage({
 			agent,

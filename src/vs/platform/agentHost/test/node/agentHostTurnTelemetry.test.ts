@@ -17,6 +17,7 @@ import { TelemetryTrustedValue } from '../../../telemetry/common/telemetryUtils.
 import { createAgentModelByokMeta } from '../../common/agentModelByokMeta.js';
 import { getTelemetryChatSessionId } from '../../common/agentTelemetryCorrelation.js';
 import { AgentSession, IAgent } from '../../common/agent.js';
+import { AgentHostClientType } from '../../common/agentHostClientInfo.js';
 import type { SessionMode } from '../../common/agentHostSchema.js';
 import { SessionConfigKey } from '../../common/sessionConfigKeys.js';
 import { ActionType, type ChatAction } from '../../common/state/sessionActions.js';
@@ -138,7 +139,7 @@ suite('AgentSideEffects — turn tracker telemetry', () => {
 		});
 	}
 
-	function startTurn(turnId: string, text = 'hello', modelId?: string, chatUri = defaultChatUri): void {
+	function startTurn(turnId: string, text = 'hello', modelId?: string, chatUri = defaultChatUri, clientType = AgentHostClientType.EditorWindow): void {
 		const action: ChatAction = {
 			type: ActionType.ChatTurnStarted,
 			turnId,
@@ -150,7 +151,7 @@ suite('AgentSideEffects — turn tracker telemetry', () => {
 		// invoke `handleAction` so the side-effect (which calls
 		// `agent.sendMessage` and `turnTracker.turnStarted`) runs.
 		stateManager.dispatchClientAction(chatUri, action, { clientId: 'test', clientSeq: 1 });
-		sideEffects.handleAction(chatUri, action);
+		sideEffects.handleAction(chatUri, action, 'test', clientType);
 	}
 
 	function fire(action: ChatAction, chatUri = defaultChatUri): void {
@@ -231,6 +232,7 @@ suite('AgentSideEffects — turn tracker telemetry', () => {
 		assert.strictEqual(events.length, 1);
 		const data = events[0].data as Record<string, unknown>;
 		assert.strictEqual(data.provider, 'mock');
+		assert.strictEqual(data.initiatorClientType, AgentHostClientType.EditorWindow);
 		assert.strictEqual(data.agentSessionId, 'session-1');
 		assert.strictEqual(data.chatSessionId, getTelemetryChatSessionId(defaultChatUri));
 		assert.strictEqual(data.turnId, 'turn-1');
@@ -388,6 +390,7 @@ suite('AgentSideEffects — turn tracker telemetry', () => {
 			const data = event.data as Record<string, unknown>;
 			return {
 				agentSessionId: data.agentSessionId,
+				initiatorClientType: data.initiatorClientType,
 				chatSessionId: data.chatSessionId,
 				isSubagentSession: data.isSubagentSession,
 				turnId: data.turnId,
@@ -396,6 +399,7 @@ suite('AgentSideEffects — turn tracker telemetry', () => {
 			};
 		}), [{
 			agentSessionId: 'session-1',
+			initiatorClientType: AgentHostClientType.EditorWindow,
 			chatSessionId: getTelemetryChatSessionId(defaultChatUri),
 			isSubagentSession: false,
 			turnId: 'turn-1',
@@ -580,7 +584,7 @@ suite('AgentSideEffects — turn tracker telemetry', () => {
 			message: { text: 'queued message', origin: { kind: MessageKind.User } },
 		};
 		stateManager.dispatchClientAction(defaultChatUri, setAction, { clientId: 'test', clientSeq: 1 });
-		sideEffects.handleAction(defaultChatUri, setAction);
+		sideEffects.handleAction(defaultChatUri, setAction, 'test', AgentHostClientType.AgentsWindow);
 
 		await new Promise(r => setTimeout(r, 10));
 
@@ -600,14 +604,17 @@ suite('AgentSideEffects — turn tracker telemetry', () => {
 			message: { text: 'queued message', origin: { kind: MessageKind.User } },
 		};
 		stateManager.dispatchClientAction(defaultChatUri, setAction, { clientId: 'test', clientSeq: 1 });
-		sideEffects.handleAction(defaultChatUri, setAction);
+		sideEffects.handleAction(defaultChatUri, setAction, 'test', AgentHostClientType.AgentsWindow);
 		const turnId = stateManager.getActiveTurnId(defaultChatUri);
 		assert.ok(turnId);
 
 		setSessionConfig({ mode: 'interactive' });
 		fire({ type: ActionType.ChatTurnComplete, turnId, duration: 1000 });
 
-		assert.strictEqual((completedEvents()[0].data as Record<string, unknown>).interactionMode, 'autopilot');
+		assert.deepStrictEqual(completedEvents().map(event => {
+			const data = event.data as Record<string, unknown>;
+			return { interactionMode: data.interactionMode, initiatorClientType: data.initiatorClientType };
+		}), [{ interactionMode: 'autopilot', initiatorClientType: AgentHostClientType.AgentsWindow }]);
 	});
 
 	test('emits a single turnCompleted when both the client cancel and a follow-up agent signal arrive', () => {

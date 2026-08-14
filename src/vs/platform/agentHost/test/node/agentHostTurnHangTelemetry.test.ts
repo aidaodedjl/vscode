@@ -17,6 +17,7 @@ import { ILogService, NullLogService } from '../../../log/common/log.js';
 import { ITelemetryService, TelemetryLevel } from '../../../telemetry/common/telemetry.js';
 import { getTelemetryChatSessionId } from '../../common/agentTelemetryCorrelation.js';
 import { AgentSession, IAgent } from '../../common/agent.js';
+import { AgentHostClientType } from '../../common/agentHostClientInfo.js';
 import { SessionInputRequestKind } from '../../common/state/protocol/state.js';
 import { ActionType, type ChatAction } from '../../common/state/sessionActions.js';
 import { buildDefaultChatUri, ChatInputQuestionKind, MessageKind, ResponsePartKind, SessionStatus, ToolCallCancellationReason, ToolCallConfirmationReason, ToolCallContributorKind } from '../../common/state/sessionState.js';
@@ -119,7 +120,7 @@ suite('AgentSideEffects — turn hang telemetry', () => {
 			message: { text: 'hello', origin: { kind: MessageKind.User } },
 		};
 		stateManager.dispatchClientAction(defaultChatUri, action, { clientId: 'test', clientSeq: 1 });
-		sideEffects.handleAction(defaultChatUri, action);
+		sideEffects.handleAction(defaultChatUri, action, 'test', AgentHostClientType.AgentsWindow);
 	}
 
 	function fire(action: ChatAction): void {
@@ -214,6 +215,7 @@ suite('AgentSideEffects — turn hang telemetry', () => {
 			eventName: 'agentHost.turnHung',
 			data: {
 				provider: 'mock',
+				initiatorClientType: AgentHostClientType.AgentsWindow,
 				agentSessionId: 'session-1',
 				chatSessionId: getTelemetryChatSessionId(defaultChatUri),
 				isSubagentSession: false,
@@ -373,6 +375,7 @@ suite('AgentSideEffects — turn hang telemetry', () => {
 			eventName: 'agentHost.hungTurnCompleted',
 			data: {
 				provider: 'mock',
+				initiatorClientType: AgentHostClientType.AgentsWindow,
 				agentSessionId: 'session-1',
 				chatSessionId: getTelemetryChatSessionId(defaultChatUri),
 				isSubagentSession: false,

@@ -345,6 +345,7 @@ suite('AgentHostTelemetryReporter', () => {
 
 		reporter.turnHung({
 			provider: 'copilot',
+			initiatorClientType: AgentHostClientType.EditorWindow,
 			session,
 			turnId: 'turn-1',
 			hangReason: 'stalledAfterProgress',
@@ -363,6 +364,7 @@ suite('AgentHostTelemetryReporter', () => {
 		});
 		reporter.turnHung({
 			provider: 'copilot',
+			initiatorClientType: AgentHostClientType.AgentsWindow,
 			session,
 			turnId: 'turn-2',
 			hangReason: 'stalledAfterProgress',
@@ -384,6 +386,7 @@ suite('AgentHostTelemetryReporter', () => {
 			eventName: 'agentHost.turnHung',
 			data: {
 				provider: 'copilot',
+				initiatorClientType: AgentHostClientType.EditorWindow,
 				agentSessionId: AgentSession.id(session),
 				chatSessionId: getTelemetryChatSessionId(session),
 				isSubagentSession: false,
@@ -406,6 +409,7 @@ suite('AgentHostTelemetryReporter', () => {
 			eventName: 'agentHost.turnHung',
 			data: {
 				provider: 'copilot',
+				initiatorClientType: AgentHostClientType.AgentsWindow,
 				agentSessionId: AgentSession.id(session),
 				chatSessionId: getTelemetryChatSessionId(session),
 				isSubagentSession: false,

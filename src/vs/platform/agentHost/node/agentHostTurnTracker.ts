@@ -8,6 +8,7 @@ import { Emitter, Event } from '../../../base/common/event.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../base/common/lifecycle.js';
 import { StopWatch } from '../../../base/common/stopwatch.js';
 import type { SessionMode } from '../common/agentHostSchema.js';
+import type { AgentHostClientType } from '../common/agentHostClientInfo.js';
 import { canRefineContributor, toolSourceKindFromContributor } from './agentHostToolCallTracker.js';
 import { SessionInputRequestKind } from '../common/state/protocol/state.js';
 import type { ToolCallContributor } from '../common/state/sessionState.js';
@@ -50,6 +51,7 @@ interface ITurnBlocker {
 interface ITurnTiming {
 	readonly stopWatch: StopWatch;
 	readonly provider: string;
+	readonly initiatorClientType: AgentHostClientType;
 	readonly session: string;
 	readonly turnId: string;
 	model: string | undefined;
@@ -138,11 +140,12 @@ export class AgentHostTurnTracker extends Disposable {
 		}));
 	}
 
-	turnStarted(provider: string, session: string, turnId: string, model: string | undefined, modelTelemetryKind: AgentHostModelTelemetryKind | undefined, permissionLevel: string | undefined, interactionMode: SessionMode | undefined): void {
+	turnStarted(provider: string, session: string, turnId: string, initiatorClientType: AgentHostClientType, model: string | undefined, modelTelemetryKind: AgentHostModelTelemetryKind | undefined, permissionLevel: string | undefined, interactionMode: SessionMode | undefined): void {
 		const key = this._key(session, turnId);
 		this._turnTimings.set(key, {
 			stopWatch: StopWatch.create(false),
 			provider,
+			initiatorClientType,
 			session,
 			turnId,
 			model,
@@ -316,6 +319,7 @@ export class AgentHostTurnTracker extends Disposable {
 
 		this._reporter.turnCompleted({
 			provider: timing.provider,
+			initiatorClientType: timing.initiatorClientType,
 			session: timing.session,
 			turnId,
 			timeToFirstProgress: timing.firstProgressMs,
@@ -337,6 +341,7 @@ export class AgentHostTurnTracker extends Disposable {
 		if (timing.lastHangReason !== undefined) {
 			this._reporter.hungTurnCompleted({
 				provider: timing.provider,
+				initiatorClientType: timing.initiatorClientType,
 				session: timing.session,
 				turnId,
 				hangReason: timing.lastHangReason,
@@ -415,6 +420,7 @@ export class AgentHostTurnTracker extends Disposable {
 			const stuckTool = this._resolveStuckTool(timing, hangReason);
 			this._reporter.turnHung({
 				provider: timing.provider,
+				initiatorClientType: timing.initiatorClientType,
 				session: timing.session,
 				turnId: timing.turnId,
 				hangReason,

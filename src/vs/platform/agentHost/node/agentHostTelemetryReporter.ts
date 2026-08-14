@@ -139,6 +139,7 @@ export type AgentHostTurnFailureStage = 'validation' | 'workingDirectory' | 'mod
 
 export interface IAgentHostTurnCompletedEvent {
 	provider: string;
+	initiatorClientType: AgentHostClientType;
 	agentSessionId: string;
 	chatSessionId: string;
 	isSubagentSession: boolean;
@@ -160,6 +161,7 @@ export interface IAgentHostTurnCompletedEvent {
 
 export type IAgentHostTurnCompletedClassification = {
 	provider: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'The provider handling the agent host session.' };
+	initiatorClientType: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'The type of AHP client that initiated the turn.' };
 	agentSessionId: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'The agent host session identifier.' };
 	chatSessionId: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'The chat identifier within the agent host session.' };
 	isSubagentSession: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; isMeasurement: true; comment: 'Whether the turn belongs to a subagent session.' };
@@ -183,6 +185,7 @@ export type IAgentHostTurnCompletedClassification = {
 
 export interface IAgentHostTurnFailedEvent {
 	provider: string;
+	initiatorClientType: AgentHostClientType;
 	agentSessionId: string;
 	chatSessionId: string;
 	isSubagentSession: boolean;
@@ -199,6 +202,7 @@ export interface IAgentHostTurnFailedEvent {
 
 export type IAgentHostTurnFailedClassification = {
 	provider: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; comment: 'The provider handling the failed agent host turn.' };
+	initiatorClientType: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; comment: 'The type of AHP client that initiated the failed turn.' };
 	agentSessionId: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; comment: 'The agent host session identifier.' };
 	chatSessionId: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; comment: 'The chat identifier within the agent host session.' };
 	isSubagentSession: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; isMeasurement: true; comment: 'Whether the failed turn belongs to a subagent session.' };
@@ -225,6 +229,7 @@ export interface IAgentHostTurnFailure {
 
 export interface IAgentHostTurnCompletedReport {
 	provider: string;
+	initiatorClientType: AgentHostClientType;
 	session: string;
 	turnId: string;
 	timeToFirstProgress: number | undefined;
@@ -311,6 +316,7 @@ function normalizeTurnActivityKind(activityKind: string): AgentHostTurnActivityT
 
 export interface IAgentHostTurnHungEvent {
 	provider: string;
+	initiatorClientType: AgentHostClientType;
 	agentSessionId: string;
 	chatSessionId: string;
 	isSubagentSession: boolean;
@@ -332,6 +338,7 @@ export interface IAgentHostTurnHungEvent {
 
 export type IAgentHostTurnHungClassification = {
 	provider: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; comment: 'The provider handling the hung agent host turn.' };
+	initiatorClientType: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; comment: 'The type of AHP client that initiated the hung turn.' };
 	agentSessionId: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; comment: 'The agent host session identifier.' };
 	chatSessionId: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; comment: 'The chat identifier within the agent host session.' };
 	isSubagentSession: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; isMeasurement: true; comment: 'Whether the hung turn belongs to a subagent session.' };
@@ -355,6 +362,7 @@ export type IAgentHostTurnHungClassification = {
 
 export interface IAgentHostTurnHungReport {
 	provider: string;
+	initiatorClientType: AgentHostClientType;
 	session: string;
 	turnId: string;
 	hangReason: AgentHostTurnHangReason;
@@ -374,6 +382,7 @@ export interface IAgentHostTurnHungReport {
 
 export interface IAgentHostHungTurnCompletedEvent {
 	provider: string;
+	initiatorClientType: AgentHostClientType;
 	agentSessionId: string;
 	chatSessionId: string;
 	isSubagentSession: boolean;
@@ -387,6 +396,7 @@ export interface IAgentHostHungTurnCompletedEvent {
 
 export type IAgentHostHungTurnCompletedClassification = {
 	provider: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; comment: 'The provider handling the recovered agent host turn.' };
+	initiatorClientType: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; comment: 'The type of AHP client that initiated the recovered turn.' };
 	agentSessionId: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; comment: 'The agent host session identifier.' };
 	chatSessionId: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; comment: 'The chat identifier within the agent host session.' };
 	isSubagentSession: { classification: 'SystemMetaData'; purpose: 'PerformanceAndHealth'; isMeasurement: true; comment: 'Whether the recovered turn belongs to a subagent session.' };
@@ -402,6 +412,7 @@ export type IAgentHostHungTurnCompletedClassification = {
 
 export interface IAgentHostHungTurnCompletedReport {
 	provider: string;
+	initiatorClientType: AgentHostClientType;
 	session: string;
 	turnId: string;
 	hangReason: AgentHostTurnHangReason;
@@ -1077,6 +1088,7 @@ export class AgentHostTelemetryReporter {
 		const model = toTelemetryModel(report.model, report.modelTelemetryKind);
 		this._telemetryService.publicLog2<IAgentHostTurnCompletedEvent, IAgentHostTurnCompletedClassification>('agentHost.turnCompleted', {
 			provider: report.provider,
+			initiatorClientType: report.initiatorClientType,
 			agentSessionId: AgentSession.id(session),
 			chatSessionId,
 			isSubagentSession: isSubagent,
@@ -1099,6 +1111,7 @@ export class AgentHostTelemetryReporter {
 			const { providerCallId, serviceRequestId } = readAgentErrorTelemetryMeta(report.failure.error);
 			this._telemetryService.publicLogError2<IAgentHostTurnFailedEvent, IAgentHostTurnFailedClassification>('agentHost.turnFailed', {
 				provider: report.provider,
+				initiatorClientType: report.initiatorClientType,
 				agentSessionId: AgentSession.id(session),
 				chatSessionId,
 				isSubagentSession: isSubagent,
@@ -1124,6 +1137,7 @@ export class AgentHostTelemetryReporter {
 		const session = isAhpChatChannel(report.session) ? parseRequiredSessionUriFromChatUri(report.session) : report.session;
 		this._telemetryService.publicLog2<IAgentHostTurnHungEvent, IAgentHostTurnHungClassification>('agentHost.turnHung', {
 			provider: report.provider,
+			initiatorClientType: report.initiatorClientType,
 			agentSessionId: AgentSession.id(session),
 			chatSessionId: getTelemetryChatSessionId(report.session),
 			isSubagentSession: isSubagentChatUri(report.session) || isSubagentSession(session),
@@ -1149,6 +1163,7 @@ export class AgentHostTelemetryReporter {
 		const session = isAhpChatChannel(report.session) ? parseRequiredSessionUriFromChatUri(report.session) : report.session;
 		this._telemetryService.publicLog2<IAgentHostHungTurnCompletedEvent, IAgentHostHungTurnCompletedClassification>('agentHost.hungTurnCompleted', {
 			provider: report.provider,
+			initiatorClientType: report.initiatorClientType,
 			agentSessionId: AgentSession.id(session),
 			chatSessionId: getTelemetryChatSessionId(report.session),
 			isSubagentSession: isSubagentChatUri(report.session) || isSubagentSession(session),
