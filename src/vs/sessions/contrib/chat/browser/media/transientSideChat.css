@@ -12,8 +12,7 @@
 }
 
 .transient-side-chat-host.hidden,
-.transient-side-chat-card.hidden,
-.transient-side-chat-collapsed.hidden {
+.transient-side-chat-card.hidden {
 	display: none;
 }
 
@@ -106,7 +105,6 @@
 .transient-side-chat-progress {
 	display: flex;
 	align-items: center;
-	gap: var(--vscode-spacing-size60);
 	box-sizing: border-box;
 	padding: var(--vscode-spacing-size60) var(--vscode-spacing-size240);
 	border-top: var(--vscode-strokeThickness) solid color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
@@ -119,9 +117,19 @@
 	display: none;
 }
 
-.transient-side-chat-progress > .codicon {
-	flex: 0 0 auto;
-	font-size: var(--vscode-codiconFontSize-compact, 12px);
+.transient-side-chat-progress-label {
+	background: linear-gradient(90deg,
+		var(--vscode-descriptionForeground) 0%,
+		var(--vscode-descriptionForeground) 30%,
+		var(--vscode-chat-thinkingShimmer) 50%,
+		var(--vscode-descriptionForeground) 70%,
+		var(--vscode-descriptionForeground) 100%);
+	background-size: 400% 100%;
+	background-clip: text;
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	animation: transient-side-chat-shimmer 2s linear infinite;
+	will-change: background-position;
 }
 
 .transient-side-chat-widget {
@@ -142,52 +150,18 @@
 	border-top: var(--vscode-strokeThickness) solid color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
 }
 
-.transient-side-chat-widget .chat-used-context {
+.transient-side-chat-widget .chat-used-context:not(.chat-thinking-box) {
 	display: none;
 }
 
-.transient-side-chat-collapsed {
-	display: inline-flex;
-	align-items: center;
-	align-self: flex-start;
-	gap: var(--vscode-spacing-size40);
-	height: 24px;
-	padding: 0 var(--vscode-spacing-size80);
-	border: var(--vscode-strokeThickness) solid transparent;
-	border-radius: var(--vscode-cornerRadius-circle);
-	color: var(--vscode-descriptionForeground);
-	background: transparent;
-	font-size: var(--vscode-agents-fontSize-label2, 11px);
-	cursor: pointer;
-}
+@keyframes transient-side-chat-shimmer {
+	0% {
+		background-position: 120% 0;
+	}
 
-.transient-side-chat-collapsed:hover {
-	color: var(--vscode-foreground);
-	background: var(--vscode-toolbar-hoverBackground);
-}
-
-.transient-side-chat-collapsed:focus-visible {
-	outline: var(--vscode-strokeThickness) solid var(--vscode-focusBorder);
-	outline-offset: 2px;
-}
-
-.transient-side-chat-collapsed > .codicon {
-	font-size: var(--vscode-codiconFontSize-compact, 12px);
-}
-
-.transient-side-chat-collapsed.needs-input {
-	border-color: currentColor;
-	color: var(--vscode-list-warningForeground);
-}
-
-.transient-side-chat-collapsed.error {
-	border-color: currentColor;
-	color: var(--vscode-list-errorForeground);
-}
-
-.hc-black .transient-side-chat-collapsed,
-.hc-light .transient-side-chat-collapsed {
-	border: var(--vscode-strokeThickness) solid var(--vscode-contrastBorder);
+	100% {
+		background-position: -120% 0;
+	}
 }
 
 .hc-black .transient-side-chat-card,
@@ -201,4 +175,18 @@
 .hc-black .transient-side-chat-progress,
 .hc-light .transient-side-chat-progress {
 	border-top-color: var(--vscode-contrastBorder);
+}
+
+.monaco-reduce-motion .transient-side-chat-progress-label {
+	animation: none;
+	background: none;
+	-webkit-text-fill-color: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.transient-side-chat-progress-label {
+		animation: none;
+		background: none;
+		-webkit-text-fill-color: currentColor;
+	}
 }

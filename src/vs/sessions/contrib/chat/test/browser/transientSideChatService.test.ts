@@ -61,27 +61,22 @@ suite('TransientSideChatService', () => {
 		});
 	});
 
-	test('hides, expands, collapses, and promotes through the normal chat path', async () => {
+	test('shows and promotes through the normal chat path', async () => {
 		const { service, calls } = setup();
 		disposables.add(service.registerHost(sourceChat.resource));
 
 		const shown = await service.show(session, sourceChat, sideChat, 'question');
-		service.collapse(sourceChat.resource);
-		const collapsed = service.states.get()[0];
-		service.expand(sourceChat.resource);
-		const expanded = service.states.get()[0];
+		const transient = service.states.get()[0];
 		await service.promote(sourceChat.resource);
 
 		assert.deepStrictEqual({
 			shown,
-			collapsed: { question: collapsed?.question, expanded: collapsed?.expanded, promoting: collapsed?.promoting },
-			expanded: { question: expanded?.question, expanded: expanded?.expanded, promoting: expanded?.promoting },
+			transient: { question: transient?.question, promoting: transient?.promoting },
 			states: service.states.get(),
 			calls,
 		}, {
 			shown: true,
-			collapsed: { question: 'question', expanded: false, promoting: false },
-			expanded: { question: 'question', expanded: true, promoting: false },
+			transient: { question: 'question', promoting: false },
 			states: [],
 			calls: [
 				`close:${sideChat.resource.toString()}:true`,

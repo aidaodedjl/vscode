@@ -19,27 +19,14 @@ import { TestInstantiationService } from '../../../../../platform/instantiation/
 import { IChatService } from '../../../../../workbench/contrib/chat/common/chatService/chatService.js';
 import { IChat, ISession, SessionStatus } from '../../../../services/sessions/common/session.js';
 import { ITransientSideChatService, ITransientSideChatState } from '../../browser/transientSideChatService.js';
-import { getTransientSideChatCollapsedPresentation, getTransientSideChatExpandedPresentation, getTransientSideChatResponseHeight, getTransientSideChatStatusAnnouncement, hasTransientSideChatResponseStarted, shouldCollapseTransientSideChatFromSourceInput, shouldShowTransientSideChatProgress, TransientSideChatWidget } from '../../browser/transientSideChatWidget.js';
+import { getTransientSideChatPresentation, getTransientSideChatResponseHeight, getTransientSideChatStatusAnnouncement, hasTransientSideChatResponseStarted, shouldDismissTransientSideChatFromSourceInput, shouldShowTransientSideChatProgress, TransientSideChatWidget } from '../../browser/transientSideChatWidget.js';
 
 suite('TransientSideChatWidget', () => {
 	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('distinguishes collapsed input-needed and error states without color alone', () => {
-		const needsInput = getTransientSideChatCollapsedPresentation(SessionStatus.NeedsInput);
-		const error = getTransientSideChatCollapsedPresentation(SessionStatus.Error);
-
-		assert.deepStrictEqual({
-			needsInput: { label: needsInput.label, icon: needsInput.icon.id, className: needsInput.className },
-			error: { label: error.label, icon: error.icon.id, className: error.className },
-		}, {
-			needsInput: { label: 'Side question · Input Needed', icon: 'warning', className: 'needs-input' },
-			error: { label: 'Side question · Failed', icon: 'error', className: 'error' },
-		});
-	});
-
-	test('explains how to continue from expanded input-needed and error states', () => {
-		const needsInput = getTransientSideChatExpandedPresentation(SessionStatus.NeedsInput);
-		const error = getTransientSideChatExpandedPresentation(SessionStatus.Error);
+	test('explains how to continue from visible input-needed and error states', () => {
+		const needsInput = getTransientSideChatPresentation(SessionStatus.NeedsInput);
+		const error = getTransientSideChatPresentation(SessionStatus.Error);
 
 		assert.deepStrictEqual({ needsInput, error }, {
 			needsInput: {
@@ -107,9 +94,9 @@ suite('TransientSideChatWidget', () => {
 		});
 	});
 
-	test('defers source-input Escape to active input interactions', () => {
+	test('defers source-input Escape dismissal to active input interactions', () => {
 		const idle = {
-			expanded: true,
+			visible: true,
 			defaultPrevented: false,
 			confirmationVisible: false,
 			suggestVisible: false,
@@ -120,12 +107,12 @@ suite('TransientSideChatWidget', () => {
 		};
 
 		assert.deepStrictEqual({
-			idle: shouldCollapseTransientSideChatFromSourceInput(idle),
-			suggest: shouldCollapseTransientSideChatFromSourceInput({ ...idle, suggestVisible: true }),
-			confirmation: shouldCollapseTransientSideChatFromSourceInput({ ...idle, confirmationVisible: true }),
-			request: shouldCollapseTransientSideChatFromSourceInput({ ...idle, requestInProgress: true }),
-			dictation: shouldCollapseTransientSideChatFromSourceInput({ ...idle, speechToTextRecording: true }),
-			editing: shouldCollapseTransientSideChatFromSourceInput({ ...idle, currentlyEditing: true }),
+			idle: shouldDismissTransientSideChatFromSourceInput(idle),
+			suggest: shouldDismissTransientSideChatFromSourceInput({ ...idle, suggestVisible: true }),
+			confirmation: shouldDismissTransientSideChatFromSourceInput({ ...idle, confirmationVisible: true }),
+			request: shouldDismissTransientSideChatFromSourceInput({ ...idle, requestInProgress: true }),
+			dictation: shouldDismissTransientSideChatFromSourceInput({ ...idle, speechToTextRecording: true }),
+			editing: shouldDismissTransientSideChatFromSourceInput({ ...idle, currentlyEditing: true }),
 		}, {
 			idle: true,
 			suggest: false,
@@ -136,7 +123,7 @@ suite('TransientSideChatWidget', () => {
 		});
 	});
 
-	test('expansion leaves the source composer mounted and exposes only answer-card actions', () => {
+	test('dismissal leaves the source composer mounted and no residual pill', () => {
 		const instantiationService = disposables.add(new TestInstantiationService());
 		instantiationService.stub(IContextKeyService, disposables.add(new MockContextKeyService()));
 		instantiationService.stub(IChatService, upcastPartial<IChatService>({}));
@@ -151,10 +138,16 @@ suite('TransientSideChatWidget', () => {
 		}));
 
 		const states = observableValue<readonly ITransientSideChatState[]>(disposables, []);
+		const removedSideChats: string[] = [];
 		instantiationService.stub(ITransientSideChatService, upcastPartial<ITransientSideChatService>({
 			states,
 			registerHost: () => toDisposable(() => undefined),
-			removeBySideChat: () => undefined,
+			removeBySideChat: resource => {
+				removedSideChats.push(resource.toString());
+				if (states.get().some(state => state.sideChat.resource.toString() === resource.toString())) {
+					states.set([], undefined);
+				}
+			},
 		}));
 
 		const document = dom.getActiveDocument();
@@ -185,7 +178,6 @@ suite('TransientSideChatWidget', () => {
 			sourceChat,
 			sideChat,
 			question: 'What changed?',
-			expanded: true,
 			promoting: false,
 			sendFailed: false,
 			replacedExisting: false,
@@ -196,11 +188,12 @@ suite('TransientSideChatWidget', () => {
 		const actionLabels = [...persistentContent.querySelectorAll<HTMLElement>('.transient-side-chat-actions [aria-label]')]
 			.map(element => element.getAttribute('aria-label'));
 		const expandedCardHidden = card?.classList.contains('hidden');
-		const progressVisibleWhileWorking = !persistentContent.querySelector('.transient-side-chat-progress')?.classList.contains('hidden');
+		const progress = persistentContent.querySelector('.transient-side-chat-progress');
+		const progressVisibleWhileWorking = !progress?.classList.contains('hidden');
+		const progressUsesShimmer = !!progress?.querySelector('.transient-side-chat-progress-label') && !progress.querySelector('.codicon');
 		states.set([{ ...state, sendFailed: true }], undefined);
 		const progressHiddenAfterFailure = persistentContent.querySelector('.transient-side-chat-progress')?.classList.contains('hidden');
-		states.set([{ ...state, expanded: false, sendFailed: true }], undefined);
-		const collapsedButton = persistentContent.querySelector<HTMLElement>('.transient-side-chat-collapsed');
+		persistentContent.querySelector<HTMLElement>('.transient-side-chat-actions [aria-label="Close Side Question"]')?.click();
 
 		assert.deepStrictEqual({
 			sourceEditorMounted: composer.contains(sourceEditor),
@@ -209,10 +202,12 @@ suite('TransientSideChatWidget', () => {
 			question: card?.querySelector('.transient-side-chat-question')?.textContent,
 			actionLabels,
 			progressVisibleWhileWorking,
+			progressUsesShimmer,
 			progressHiddenAfterFailure,
+			removedSideChat: removedSideChats.at(-1),
+			hostHiddenAfterClose: persistentContent.querySelector('.transient-side-chat-host')?.classList.contains('hidden'),
+			residualPillCount: persistentContent.querySelectorAll('.transient-side-chat-collapsed').length,
 			nestedComposerCount: persistentContent.querySelectorAll('.transient-side-chat-widget .interactive-input-part:not(.chat-input-hidden)').length,
-			collapsedExpanded: collapsedButton?.getAttribute('aria-expanded'),
-			collapsedControlsCard: collapsedButton?.getAttribute('aria-controls') === card?.id,
 		}, {
 			sourceEditorMounted: true,
 			sourceEditorDisplay: '',
@@ -220,10 +215,12 @@ suite('TransientSideChatWidget', () => {
 			question: 'What changed?',
 			actionLabels: ['Side question actions', 'Open Full Chat', 'Close Side Question'],
 			progressVisibleWhileWorking: true,
+			progressUsesShimmer: true,
 			progressHiddenAfterFailure: true,
+			removedSideChat: sideChat.resource.toString(),
+			hostHiddenAfterClose: true,
+			residualPillCount: 0,
 			nestedComposerCount: 0,
-			collapsedExpanded: 'false',
-			collapsedControlsCard: true,
 		});
 	});
 });

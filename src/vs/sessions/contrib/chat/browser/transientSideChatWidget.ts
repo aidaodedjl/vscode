@@ -27,6 +27,7 @@ import { getDefaultHoverDelegate } from '../../../../base/browser/ui/hover/hover
 import { EDITOR_DRAG_AND_DROP_BACKGROUND } from '../../../../workbench/common/theme.js';
 import { setModelPreservingInputTypedWhileLoading } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { ChatWidget } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import { ChatCollapsibleContentPart } from '../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatCollapsibleContentPart.js';
 import { IChatModelReference, IChatService } from '../../../../workbench/contrib/chat/common/chatService/chatService.js';
 import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { ChatAgentLocation } from '../../../../workbench/contrib/chat/common/constants.js';
@@ -54,10 +55,6 @@ const MIN_RESPONSE_VIEWPORT_HEIGHT = 1;
 const SIDE_QUESTION_MAX_HEIGHT_RATIO = 0.6;
 const CHAT_CONTENT_MAX_WIDTH = 950;
 const CHAT_INPUT_HORIZONTAL_INSET = 64;
-
-function createDecorativeIcon(icon: ThemeIcon): HTMLElement {
-	return dom.$(`span${ThemeIcon.asCSSSelector(icon)}`, { 'aria-hidden': 'true' });
-}
 
 export function getTransientSideChatResponseHeight(viewHeight: number, contentHeight: number, cardChromeHeight = 0): number {
 	const maxHeight = Math.max(MIN_RESPONSE_VIEWPORT_HEIGHT, Math.floor(viewHeight * SIDE_QUESTION_MAX_HEIGHT_RATIO) - Math.ceil(cardChromeHeight));
@@ -92,8 +89,8 @@ export function getTransientSideChatStatusAnnouncement(previousStatus: SessionSt
 	}
 }
 
-export function shouldCollapseTransientSideChatFromSourceInput(state: {
-	readonly expanded: boolean;
+export function shouldDismissTransientSideChatFromSourceInput(state: {
+	readonly visible: boolean;
 	readonly defaultPrevented: boolean;
 	readonly confirmationVisible: boolean;
 	readonly suggestVisible: boolean;
@@ -102,7 +99,7 @@ export function shouldCollapseTransientSideChatFromSourceInput(state: {
 	readonly speechToTextRecording: boolean;
 	readonly currentlyEditing: boolean;
 }): boolean {
-	return state.expanded
+	return state.visible
 		&& !state.defaultPrevented
 		&& !state.confirmationVisible
 		&& !state.suggestVisible
@@ -112,24 +109,7 @@ export function shouldCollapseTransientSideChatFromSourceInput(state: {
 		&& !state.currentlyEditing;
 }
 
-export function getTransientSideChatCollapsedPresentation(status: SessionStatus): {
-	readonly label: string;
-	readonly icon: ThemeIcon;
-	readonly className: 'needs-input' | 'error' | undefined;
-} {
-	switch (status) {
-		case SessionStatus.InProgress:
-			return { label: localize('transientSideChat.working', "Side question · Working"), icon: Codicon.commentDiscussion, className: undefined };
-		case SessionStatus.NeedsInput:
-			return { label: localize('transientSideChat.needsInput', "Side question · Input Needed"), icon: Codicon.warning, className: 'needs-input' };
-		case SessionStatus.Error:
-			return { label: localize('transientSideChat.failed', "Side question · Failed"), icon: Codicon.error, className: 'error' };
-		default:
-			return { label: localize('transientSideChat.collapsed', "Side question"), icon: Codicon.commentDiscussion, className: undefined };
-	}
-}
-
-export function getTransientSideChatExpandedPresentation(status: SessionStatus): {
+export function getTransientSideChatPresentation(status: SessionStatus): {
 	readonly statusLabel: string;
 	readonly promoteLabel: string;
 	readonly className: 'needs-input' | 'error' | undefined;
@@ -137,13 +117,13 @@ export function getTransientSideChatExpandedPresentation(status: SessionStatus):
 	switch (status) {
 		case SessionStatus.NeedsInput:
 			return {
-				statusLabel: localize('transientSideChat.expandedNeedsInput', "Input needed. Open the full chat to continue."),
+				statusLabel: localize('transientSideChat.needsInputStatus', "Input needed. Open the full chat to continue."),
 				promoteLabel: localize('transientSideChat.promoteToContinue', "Open Full Chat to Continue"),
 				className: 'needs-input',
 			};
 		case SessionStatus.Error:
 			return {
-				statusLabel: localize('transientSideChat.expandedFailed', "The side question failed. Open the full chat for details."),
+				statusLabel: localize('transientSideChat.failedDetail', "The side question failed. Open the full chat for details."),
 				promoteLabel: localize('transientSideChat.promoteForDetails', "Open Full Chat for Details"),
 				className: 'error',
 			};
@@ -161,9 +141,6 @@ export class TransientSideChatWidget extends Disposable {
 
 	private readonly _card: HTMLElement;
 	private readonly _header: HTMLElement;
-	private readonly _collapsedButton: HTMLButtonElement;
-	private readonly _collapsedIcon: HTMLElement;
-	private readonly _collapsedLabel: HTMLElement;
 	private readonly _questionText: HTMLElement;
 	private readonly _statusText: HTMLElement;
 	private readonly _progress: HTMLElement;
@@ -177,7 +154,6 @@ export class TransientSideChatWidget extends Disposable {
 
 	private readonly _source = observableValue<ITransientSideChatSource | undefined>(this, undefined);
 	private readonly _state: IObservable<ITransientSideChatState | undefined>;
-	private readonly _isExpanded: IObservable<boolean>;
 	private readonly _hostRegistration = this._register(new MutableDisposable());
 	private readonly _modelRef = this._register(new MutableDisposable<IChatModelReference>());
 	private readonly _loadCts = this._register(new MutableDisposable<CancellationTokenSource>());
@@ -185,13 +161,13 @@ export class TransientSideChatWidget extends Disposable {
 	private _hostVisible = true;
 	private _active = true;
 	private _lastLayout: { readonly height: number; readonly width: number } | undefined;
-	private _lastCollapsedStatus: SessionStatus | undefined;
 	private _announcedSideChatResource: string | undefined;
 	private _lastSideChatStatus: SessionStatus | undefined;
 	private _progressVisible = false;
 	private _progressSideChatResource: string | undefined;
 	private _waitingForFirstContent = false;
 	private _emptyResponseHeight: number | undefined;
+	private _fixedResponseHeight: number | undefined;
 
 	constructor(
 		parent: HTMLElement,
@@ -207,13 +183,6 @@ export class TransientSideChatWidget extends Disposable {
 		this._sourceContextKeyService = contextKeyService;
 
 		this.element = dom.append(parent, dom.$('.transient-side-chat-host.hidden'));
-		this._collapsedButton = dom.append(this.element, dom.$('button.transient-side-chat-collapsed.hidden', {
-			type: 'button',
-			'aria-expanded': 'false',
-		}));
-		this._collapsedIcon = createDecorativeIcon(Codicon.commentDiscussion);
-		this._collapsedButton.appendChild(this._collapsedIcon);
-		this._collapsedLabel = dom.append(this._collapsedButton, dom.$('span.transient-side-chat-collapsed-label'));
 
 		const cardId = `transient-side-chat-${++transientSideChatIdPool}`;
 		this._card = dom.append(this.element, dom.$('.transient-side-chat-card.hidden', {
@@ -221,7 +190,6 @@ export class TransientSideChatWidget extends Disposable {
 			role: 'region',
 			tabindex: '-1',
 		}));
-		this._collapsedButton.setAttribute('aria-controls', cardId);
 
 		this._header = dom.append(this._card, dom.$('.transient-side-chat-header'));
 		const heading = dom.append(this._header, dom.$('.transient-side-chat-heading'));
@@ -254,14 +222,19 @@ export class TransientSideChatWidget extends Disposable {
 			localize('transientSideChat.close', "Close Side Question"),
 			ThemeIcon.asClassName(Codicon.close),
 			true,
-			() => this._collapse(),
+			() => this._dismiss(),
 		));
 		actions.push([this._promoteAction, this._closeAction], { icon: true, label: false });
 
 		this._progress = dom.append(this._card, dom.$('.transient-side-chat-progress.hidden'));
-		this._progress.appendChild(createDecorativeIcon(ThemeIcon.modify(Codicon.loadingCompact, 'spin')));
-		dom.append(this._progress, dom.$('span', undefined, localize('transientSideChat.workingOnIt', "Working on it...")));
+		dom.append(this._progress, dom.$('span.transient-side-chat-progress-label', undefined, localize('transientSideChat.workingOnIt', "Working on it...")));
 		this._widgetHost = dom.append(this._card, dom.$('.transient-side-chat-widget'));
+		this._register(dom.addDisposableListener(this._widgetHost, ChatCollapsibleContentPart.userToggleEvent, () => {
+			const widget = this._widget.value;
+			if (widget && !this._progressVisible && this._fixedResponseHeight === undefined && widget.viewportHeight > 0) {
+				this._fixedResponseHeight = widget.viewportHeight;
+			}
+		}));
 		this._scopedContextKeyService = this._register(contextKeyService.createScoped(this.element));
 		this._scopedInstantiationService = this._register(instantiationService.createChild(new ServiceCollection(
 			[IContextKeyService, this._scopedContextKeyService],
@@ -276,23 +249,17 @@ export class TransientSideChatWidget extends Disposable {
 			return this._transientSideChatService.states.read(reader)
 				.find(state => state.sourceChat.resource.toString() === sourceResource);
 		});
-		this._isExpanded = derived(this, reader => {
-			const state = this._state.read(reader);
-			return !!state && (state.expanded || state.promoting);
-		});
-
 		this._register(autorun(reader => this._renderState(this._state.read(reader), reader)));
-		this._register(dom.addDisposableListener(this._collapsedButton, dom.EventType.CLICK, () => this._expand()));
 		this._register(dom.addDisposableListener(this.element, dom.EventType.KEY_DOWN, (event: KeyboardEvent) => {
 			if (event.key !== 'Escape') {
 				return;
 			}
-			if (event.defaultPrevented || !this._isExpanded.get() || this._state.get()?.promoting) {
+			if (event.defaultPrevented || !this._state.get() || this._state.get()?.promoting) {
 				return;
 			}
 			event.preventDefault();
 			event.stopPropagation();
-			this._collapse();
+			this._dismiss();
 		}));
 		const sourceInputEditor = this._mainWidget.inputEditor.getDomNode();
 		if (sourceInputEditor) {
@@ -301,8 +268,8 @@ export class TransientSideChatWidget extends Disposable {
 					return;
 				}
 				const focusedContext = this._sourceContextKeyService.getContext(dom.getActiveElement());
-				if (!shouldCollapseTransientSideChatFromSourceInput({
-					expanded: this._isExpanded.get(),
+				if (!shouldDismissTransientSideChatFromSourceInput({
+					visible: !!this._state.get() && !this._state.get()?.promoting,
 					defaultPrevented: event.defaultPrevented,
 					confirmationVisible: this._mainWidget.inputPart.hasActiveToolConfirmationCarousel,
 					suggestVisible: focusedContext.getValue<boolean>('suggestWidgetVisible') ?? false,
@@ -316,7 +283,7 @@ export class TransientSideChatWidget extends Disposable {
 				}
 				event.preventDefault();
 				event.stopPropagation();
-				this._collapse();
+				this._dismiss();
 			}));
 		}
 	}
@@ -356,7 +323,7 @@ export class TransientSideChatWidget extends Disposable {
 		}
 		const widgetHeight = this._progressVisible
 			? MIN_RESPONSE_VIEWPORT_HEIGHT
-			: getTransientSideChatResponseHeight(height, widget.scrollHeight, this._header.offsetHeight);
+			: getTransientSideChatResponseHeight(height, this._fixedResponseHeight ?? widget.scrollHeight, this._header.offsetHeight);
 		const widgetWidth = this._widgetHost.clientWidth || Math.max(0, Math.min(width - CHAT_INPUT_HORIZONTAL_INSET, CHAT_CONTENT_MAX_WIDTH));
 		widget.layout(widgetHeight, widgetWidth);
 	}
@@ -371,24 +338,19 @@ export class TransientSideChatWidget extends Disposable {
 		this.element.classList.toggle('hidden', !visible);
 		if (!state) {
 			this._card.classList.add('hidden');
-			this._collapsedButton.classList.add('hidden');
-			this._collapsedButton.setAttribute('aria-expanded', 'false');
-			this._lastCollapsedStatus = undefined;
 			this._announcedSideChatResource = undefined;
 			this._lastSideChatStatus = undefined;
 			this._progressSideChatResource = undefined;
 			this._waitingForFirstContent = false;
 			this._emptyResponseHeight = undefined;
+			this._fixedResponseHeight = undefined;
 			this._setProgressVisible(false);
 			this._clearSideModel();
 			this._syncWidgetVisibility();
 			return;
 		}
 
-		const expanded = state.expanded || state.promoting;
-		this._card.classList.toggle('hidden', !expanded);
-		this._collapsedButton.classList.toggle('hidden', expanded);
-		this._collapsedButton.setAttribute('aria-expanded', String(expanded));
+		this._card.classList.remove('hidden');
 		this._promoteAction.enabled = !state.promoting;
 		this._closeAction.enabled = !state.promoting;
 
@@ -400,39 +362,25 @@ export class TransientSideChatWidget extends Disposable {
 			this._progressSideChatResource = sideChatResource;
 			this._waitingForFirstContent = true;
 			this._emptyResponseHeight = undefined;
+			this._fixedResponseHeight = undefined;
 		}
 		const isNewSideChat = sideChatResource !== this._announcedSideChatResource;
 		const statusAnnouncement = getTransientSideChatStatusAnnouncement(this._lastSideChatStatus, status, isNewSideChat, state.replacedExisting);
-		if (this._hostVisible && this._active && statusAnnouncement && (expanded || status === SessionStatus.Completed)) {
+		if (this._hostVisible && this._active && statusAnnouncement) {
 			announceStatus(statusAnnouncement);
 		}
 		this._announcedSideChatResource = sideChatResource;
 		this._lastSideChatStatus = status;
 
-		const expandedPresentation = getTransientSideChatExpandedPresentation(status);
-		this._statusText.textContent = expandedPresentation.statusLabel;
-		this._statusText.classList.toggle('hidden', !expandedPresentation.statusLabel);
-		this._statusText.classList.toggle('needs-input', expandedPresentation.className === 'needs-input');
-		this._statusText.classList.toggle('error', expandedPresentation.className === 'error');
-		this._promoteAction.label = expandedPresentation.promoteLabel;
+		const presentation = getTransientSideChatPresentation(status);
+		this._statusText.textContent = presentation.statusLabel;
+		this._statusText.classList.toggle('hidden', !presentation.statusLabel);
+		this._statusText.classList.toggle('needs-input', presentation.className === 'needs-input');
+		this._statusText.classList.toggle('error', presentation.className === 'error');
+		this._promoteAction.label = presentation.promoteLabel;
 		this._updateProgress(status);
 
-		const collapsedPresentation = getTransientSideChatCollapsedPresentation(status);
-		this._collapsedLabel.textContent = collapsedPresentation.label;
-		this._collapsedButton.classList.toggle('needs-input', collapsedPresentation.className === 'needs-input');
-		this._collapsedButton.classList.toggle('error', collapsedPresentation.className === 'error');
-		this._collapsedIcon.className = ThemeIcon.asClassName(collapsedPresentation.icon);
-		this._collapsedIcon.setAttribute('aria-hidden', 'true');
-		if (!expanded) {
-			if (this._hostVisible && this._active && status !== this._lastCollapsedStatus && (status === SessionStatus.NeedsInput || status === SessionStatus.Error)) {
-				announceStatus(collapsedPresentation.label);
-			}
-			this._lastCollapsedStatus = status;
-		}
-
-		if (expanded) {
-			this._ensureSideModel(state);
-		}
+		this._ensureSideModel(state);
 		this._syncWidgetVisibility();
 		if (this._lastLayout) {
 			this.layout(this._lastLayout.height, this._lastLayout.width);
@@ -495,6 +443,7 @@ export class TransientSideChatWidget extends Disposable {
 					noFooter: true,
 					editable: false,
 					contentHorizontalPadding: 24,
+					animateCompletedResponseCollapse: false,
 				},
 				enableImplicitContext: false,
 				supportsChangingModes: false,
@@ -539,7 +488,7 @@ export class TransientSideChatWidget extends Disposable {
 
 	private _updateProgress(status?: SessionStatus): void {
 		const state = this._state.get();
-		if (!state || !(state.expanded || state.promoting)) {
+		if (!state) {
 			this._setProgressVisible(false);
 			return;
 		}
@@ -567,24 +516,15 @@ export class TransientSideChatWidget extends Disposable {
 
 	private _syncWidgetVisibility(): void {
 		const state = this._state.get();
-		this._widget.value?.setVisible(this._hostVisible && !!state && (state.expanded || state.promoting));
+		this._widget.value?.setVisible(this._hostVisible && !!state);
 	}
 
-	private _expand(): void {
-		const source = this._source.get();
-		if (source) {
-			this._transientSideChatService.expand(source.chat.resource);
-			this._card.focus();
-			announceStatus(localize('transientSideChat.openedStatus', "Side question opened"));
-		}
-	}
-
-	private _collapse(): void {
-		const source = this._source.get();
-		if (source) {
-			this._transientSideChatService.collapse(source.chat.resource);
+	private _dismiss(): void {
+		const state = this._state.get();
+		if (state) {
+			this._transientSideChatService.removeBySideChat(state.sideChat.resource);
 			this._mainWidget.focusInput();
-			announceStatus(localize('transientSideChat.collapsedStatus', "Side question closed"));
+			announceStatus(localize('transientSideChat.closedStatus', "Side question closed"));
 		}
 	}
 

@@ -16,7 +16,6 @@ export interface ITransientSideChatState {
 	readonly sourceChat: IChat;
 	readonly sideChat: IChat;
 	readonly question: string;
-	readonly expanded: boolean;
 	readonly promoting: boolean;
 	readonly sendFailed: boolean;
 	readonly replacedExisting: boolean;
@@ -29,8 +28,6 @@ export interface ITransientSideChatService {
 	readonly states: IObservable<readonly ITransientSideChatState[]>;
 	registerHost(sourceChat: URI): IDisposable;
 	show(session: ISession, sourceChat: IChat, sideChat: IChat, question: string): Promise<boolean>;
-	expand(sourceChat: URI): void;
-	collapse(sourceChat: URI): void;
 	promote(sourceChat: URI): Promise<void>;
 	markSendFailed(sideChat: URI): void;
 	removeBySideChat(sideChat: URI): void;
@@ -91,28 +88,11 @@ export class TransientSideChatService extends Disposable implements ITransientSi
 			sourceChat,
 			sideChat,
 			question,
-			expanded: true,
 			promoting: false,
 			sendFailed: false,
 			replacedExisting,
 		});
 		return true;
-	}
-
-	expand(sourceChat: URI): void {
-		const state = this._getState(sourceChat);
-		if (!state || state.expanded || state.promoting) {
-			return;
-		}
-		this._setState({ ...state, expanded: true });
-	}
-
-	collapse(sourceChat: URI): void {
-		const state = this._getState(sourceChat);
-		if (!state || !state.expanded || state.promoting) {
-			return;
-		}
-		this._setState({ ...state, expanded: false });
 	}
 
 	async promote(sourceChat: URI): Promise<void> {
