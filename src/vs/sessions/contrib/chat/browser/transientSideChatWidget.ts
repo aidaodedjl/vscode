@@ -56,9 +56,9 @@ const SIDE_QUESTION_MAX_HEIGHT_RATIO = 0.6;
 const CHAT_CONTENT_MAX_WIDTH = 950;
 const CHAT_INPUT_HORIZONTAL_INSET = 64;
 
-export function getTransientSideChatResponseHeight(viewHeight: number, contentHeight: number, cardChromeHeight = 0): number {
-	const maxHeight = Math.max(MIN_RESPONSE_VIEWPORT_HEIGHT, Math.floor(viewHeight * SIDE_QUESTION_MAX_HEIGHT_RATIO) - Math.ceil(cardChromeHeight));
-	const desiredHeight = Math.max(MIN_RESPONSE_VIEWPORT_HEIGHT, Math.ceil(contentHeight));
+export function getTransientSideChatResponseHeight(viewHeight: number, contentHeight: number, cardChromeHeight = 0, minimumHeight = MIN_RESPONSE_VIEWPORT_HEIGHT): number {
+	const maxHeight = Math.max(minimumHeight, Math.floor(viewHeight * SIDE_QUESTION_MAX_HEIGHT_RATIO) - Math.ceil(cardChromeHeight));
+	const desiredHeight = Math.max(minimumHeight, Math.ceil(contentHeight));
 	return Math.min(maxHeight, desiredHeight);
 }
 
@@ -168,6 +168,7 @@ export class TransientSideChatWidget extends Disposable {
 	private _waitingForFirstContent = false;
 	private _emptyResponseHeight: number | undefined;
 	private _fixedResponseHeight: number | undefined;
+	private _minimumResponseHeight = MIN_RESPONSE_VIEWPORT_HEIGHT;
 
 	constructor(
 		parent: HTMLElement,
@@ -323,7 +324,7 @@ export class TransientSideChatWidget extends Disposable {
 		}
 		const widgetHeight = this._progressVisible
 			? MIN_RESPONSE_VIEWPORT_HEIGHT
-			: getTransientSideChatResponseHeight(height, this._fixedResponseHeight ?? widget.scrollHeight, this._header.offsetHeight);
+			: getTransientSideChatResponseHeight(height, this._fixedResponseHeight ?? widget.scrollHeight, this._header.offsetHeight, this._minimumResponseHeight);
 		const widgetWidth = this._widgetHost.clientWidth || Math.max(0, Math.min(width - CHAT_INPUT_HORIZONTAL_INSET, CHAT_CONTENT_MAX_WIDTH));
 		widget.layout(widgetHeight, widgetWidth);
 	}
@@ -434,6 +435,7 @@ export class TransientSideChatWidget extends Disposable {
 			{},
 			{
 				autoScroll: false,
+				defaultElementHeight: MIN_RESPONSE_VIEWPORT_HEIGHT,
 				renderFollowups: false,
 				renderStyle: 'compact',
 				renderGettingStartedTip: false,
@@ -503,6 +505,9 @@ export class TransientSideChatWidget extends Disposable {
 		this._progressVisible = visible;
 		this._progress.classList.toggle('hidden', !visible);
 		this._widgetHost.classList.toggle('pending', visible);
+		if (visible) {
+			this._minimumResponseHeight = Math.max(MIN_RESPONSE_VIEWPORT_HEIGHT, this._progress.offsetHeight);
+		}
 	}
 
 	private _clearSideModel(): void {

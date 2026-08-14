@@ -106,7 +106,7 @@
 	display: flex;
 	align-items: center;
 	box-sizing: border-box;
-	padding: var(--vscode-spacing-size60) var(--vscode-spacing-size240);
+	padding: var(--vscode-spacing-size100) var(--vscode-spacing-size240);
 	border-top: var(--vscode-strokeThickness) solid color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
 	color: var(--vscode-descriptionForeground);
 	font-size: var(--vscode-agents-fontSize-body1, 13px);

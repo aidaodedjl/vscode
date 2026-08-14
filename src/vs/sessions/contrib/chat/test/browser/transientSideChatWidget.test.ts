@@ -48,11 +48,13 @@ suite('TransientSideChatWidget', () => {
 			tallAnswer: getTransientSideChatResponseHeight(1000, 700, 50),
 			shortView: getTransientSideChatResponseHeight(400, 500, 50),
 			empty: getTransientSideChatResponseHeight(1000, 0, 50),
+			measuredMinimum: getTransientSideChatResponseHeight(1000, 10, 50, 38),
 		}, {
 			shortAnswer: 28,
 			tallAnswer: 550,
 			shortView: 190,
 			empty: 1,
+			measuredMinimum: 38,
 		});
 	});
 
