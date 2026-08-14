@@ -56,6 +56,7 @@ suite('TransientSideChatWidget', () => {
 			measuredMinimum: getTransientSideChatResponseHeight(1000, 10, 50, 38),
 			renderedHeightWins: getTransientSideChatPinnedResponseHeight(173, 77),
 			viewportFallback: getTransientSideChatPinnedResponseHeight(0, 77),
+			layoutHeightWins: getTransientSideChatPinnedResponseHeight(173, 77, 172),
 		}, {
 			shortAnswer: 28,
 			tallAnswer: 550,
@@ -64,6 +65,7 @@ suite('TransientSideChatWidget', () => {
 			measuredMinimum: 38,
 			renderedHeightWins: 173,
 			viewportFallback: 77,
+			layoutHeightWins: 172,
 		});
 	});
 
@@ -234,6 +236,7 @@ suite('TransientSideChatWidget', () => {
 		const nestedWidgetSlot = Reflect.get(widget, '_widget') as { value: ChatWidget | undefined };
 		nestedWidgetSlot.value = nestedWidget;
 		Reflect.set(widget, '_lastLayout', { height: 1000, width: 900 });
+		Reflect.set(widget, '_lastResponseLayoutHeight', 172);
 		const widgetHost = persistentContent.querySelector<HTMLElement>('.transient-side-chat-widget');
 		assert.ok(widgetHost);
 		Object.defineProperty(widgetHost, 'clientHeight', { configurable: true, value: 173 });
@@ -265,7 +268,7 @@ suite('TransientSideChatWidget', () => {
 			progressUsesShimmer: true,
 			progressActivity: 'Starting MCP servers',
 			progressHiddenAfterFailure: true,
-			pinnedLayoutCalls: [[173, 800]],
+			pinnedLayoutCalls: [[172, 800]],
 			removedSideChat: sideChat.resource.toString(),
 			hostHiddenAfterClose: true,
 			residualPillCount: 0,

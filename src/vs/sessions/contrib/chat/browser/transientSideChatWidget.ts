@@ -66,8 +66,8 @@ export function getTransientSideChatResponseHeight(viewHeight: number, contentHe
 	return Math.min(maxHeight, desiredHeight);
 }
 
-export function getTransientSideChatPinnedResponseHeight(renderedHeight: number, viewportHeight: number): number | undefined {
-	const height = renderedHeight || viewportHeight;
+export function getTransientSideChatPinnedResponseHeight(renderedHeight: number, viewportHeight: number, layoutHeight?: number): number | undefined {
+	const height = layoutHeight || renderedHeight || viewportHeight;
 	return height > 0 ? height : undefined;
 }
 
@@ -212,6 +212,7 @@ export class TransientSideChatWidget extends Disposable {
 	private _progressSideChatResource: string | undefined;
 	private _waitingForFinalResponse = false;
 	private _fixedResponseHeight: number | undefined;
+	private _lastResponseLayoutHeight: number | undefined;
 	private _minimumResponseHeight = MIN_RESPONSE_VIEWPORT_HEIGHT;
 	private _chatActivity = '';
 
@@ -283,7 +284,7 @@ export class TransientSideChatWidget extends Disposable {
 		this._register(dom.addDisposableListener(this._widgetHost, ChatCollapsibleContentPart.userToggleEvent, () => {
 			const widget = this._widget.value;
 			if (widget && !this._progressVisible && this._fixedResponseHeight === undefined) {
-				this._fixedResponseHeight = getTransientSideChatPinnedResponseHeight(this._widgetHost.clientHeight, widget.viewportHeight);
+				this._fixedResponseHeight = getTransientSideChatPinnedResponseHeight(this._widgetHost.clientHeight, widget.viewportHeight, this._lastResponseLayoutHeight);
 				if (this._fixedResponseHeight !== undefined && this._lastLayout) {
 					this.layout(this._lastLayout.height, this._lastLayout.width);
 				}
@@ -378,6 +379,7 @@ export class TransientSideChatWidget extends Disposable {
 		const widgetHeight = this._progressVisible
 			? MIN_RESPONSE_VIEWPORT_HEIGHT
 			: getTransientSideChatResponseHeight(height, this._fixedResponseHeight ?? widget.scrollHeight, this._header.offsetHeight, this._minimumResponseHeight);
+		this._lastResponseLayoutHeight = widgetHeight;
 		const widgetWidth = this._widgetHost.clientWidth || Math.max(0, Math.min(width - CHAT_INPUT_HORIZONTAL_INSET, CHAT_CONTENT_MAX_WIDTH));
 		widget.layout(widgetHeight, widgetWidth);
 	}
