@@ -333,7 +333,7 @@ export class TransientSideChatWidget extends Disposable {
 			}
 			this._modelRef.value = ref;
 			setModelPreservingInputTypedWhileLoading(widget, inputBeforeLoad, () => widget.setModel(ref.object));
-			this.element.dataset.boundChatResource = resource.toString();
+			this.element.dataset.transientChatResource = resource.toString();
 			this._syncWidgetVisibility();
 		}, error => {
 			if (!cts.token.isCancellationRequested) {
@@ -392,7 +392,7 @@ export class TransientSideChatWidget extends Disposable {
 		this._currentSideChatResource = undefined;
 		this._widget.value?.setModel(undefined);
 		this._modelRef.clear();
-		delete this.element.dataset.boundChatResource;
+		delete this.element.dataset.transientChatResource;
 	}
 
 	private _syncWidgetVisibility(): void {
