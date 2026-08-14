@@ -20,22 +20,17 @@ export interface ITransientSideChatState {
 	readonly promoting: boolean;
 }
 
-export interface ITransientSideChatHost {
-	revealSource(): boolean;
-}
-
 export const ITransientSideChatService = createDecorator<ITransientSideChatService>('transientSideChatService');
 
 export interface ITransientSideChatService {
 	readonly _serviceBrand: undefined;
 	readonly states: IObservable<readonly ITransientSideChatState[]>;
-	registerHost(sourceChat: URI, host: ITransientSideChatHost): IDisposable;
+	registerHost(sourceChat: URI): IDisposable;
 	show(session: ISession, sourceChat: IChat, sideChat: IChat, question: string): Promise<boolean>;
 	expand(sourceChat: URI): void;
 	collapse(sourceChat: URI): void;
 	promote(sourceChat: URI): Promise<void>;
 	removeBySideChat(sideChat: URI): void;
-	revealSource(sideChat: URI): boolean;
 }
 
 export class TransientSideChatService extends Disposable implements ITransientSideChatService {
@@ -44,7 +39,7 @@ export class TransientSideChatService extends Disposable implements ITransientSi
 	private readonly _states = observableValue<readonly ITransientSideChatState[]>(this, []);
 	readonly states: IObservable<readonly ITransientSideChatState[]> = this._states;
 
-	private readonly _hosts = new Map<string, ITransientSideChatHost>();
+	private readonly _hosts = new Map<string, object>();
 
 	constructor(
 		@ISessionsService private readonly sessionsService: ISessionsService,
@@ -68,11 +63,12 @@ export class TransientSideChatService extends Disposable implements ITransientSi
 		}));
 	}
 
-	registerHost(sourceChat: URI, host: ITransientSideChatHost): IDisposable {
+	registerHost(sourceChat: URI): IDisposable {
 		const key = sourceChat.toString();
-		this._hosts.set(key, host);
+		const registration = {};
+		this._hosts.set(key, registration);
 		return toDisposable(() => {
-			if (this._hosts.get(key) === host) {
+			if (this._hosts.get(key) === registration) {
 				this._hosts.delete(key);
 			}
 		});
@@ -134,11 +130,6 @@ export class TransientSideChatService extends Disposable implements ITransientSi
 		if (state) {
 			this._remove(state.sourceChat.resource);
 		}
-	}
-
-	revealSource(sideChat: URI): boolean {
-		const state = this._states.get().find(candidate => candidate.sideChat.resource.toString() === sideChat.toString());
-		return !!state && (this._hosts.get(state.sourceChat.resource.toString())?.revealSource() ?? false);
 	}
 
 	private _getState(sourceChat: URI): ITransientSideChatState | undefined {

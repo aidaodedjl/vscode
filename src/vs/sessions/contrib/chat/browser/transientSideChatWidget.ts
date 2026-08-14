@@ -30,7 +30,7 @@ import { ChatAgentLocation } from '../../../../workbench/contrib/chat/common/con
 import { isResponseVM } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { IChat, ISession, SessionStatus } from '../../../services/sessions/common/session.js';
 import { activeSessionViewBackground, activeSessionViewForeground, agentsPanelBackground, inactiveSessionViewBackground } from '../../../common/theme.js';
-import { ITransientSideChatHost, ITransientSideChatService, ITransientSideChatState } from './transientSideChatService.js';
+import { ITransientSideChatService, ITransientSideChatState } from './transientSideChatService.js';
 
 interface ITransientSideChatSource {
 	readonly chat: IChat;
@@ -60,7 +60,7 @@ export function getTransientSideChatCollapsedPresentation(status: SessionStatus)
 	}
 }
 
-export class TransientSideChatWidget extends Disposable implements ITransientSideChatHost {
+export class TransientSideChatWidget extends Disposable {
 	readonly element: HTMLElement;
 	readonly isExpanded: IObservable<boolean>;
 
@@ -195,17 +195,7 @@ export class TransientSideChatWidget extends Disposable implements ITransientSid
 		this._transientSideChatService.removeBySideChat(chat.resource);
 		this._clearSideModel();
 		this._source.set({ chat, session }, undefined);
-		this._hostRegistration.value = this._transientSideChatService.registerHost(chat.resource, this);
-	}
-
-	revealSource(): boolean {
-		const turnId = this._state.get()?.sideChat.origin?.turnId;
-		const item = turnId ? this._mainWidget.viewModel?.getItems().find(candidate => candidate.id === turnId) : undefined;
-		if (!item) {
-			return false;
-		}
-		this._mainWidget.reveal(item);
-		return true;
+		this._hostRegistration.value = this._transientSideChatService.registerHost(chat.resource);
 	}
 
 	setActive(active: boolean): void {

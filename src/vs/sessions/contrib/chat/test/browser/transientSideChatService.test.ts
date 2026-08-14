@@ -12,7 +12,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { IChat, ISession } from '../../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
-import { ITransientSideChatHost, TransientSideChatService } from '../../browser/transientSideChatService.js';
+import { TransientSideChatService } from '../../browser/transientSideChatService.js';
 
 suite('TransientSideChatService', () => {
 	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
@@ -61,8 +61,7 @@ suite('TransientSideChatService', () => {
 
 	test('hides, expands, collapses, and promotes through the normal chat path', async () => {
 		const { service, calls } = setup();
-		const host = upcastPartial<ITransientSideChatHost>({ revealSource: () => true });
-		disposables.add(service.registerHost(sourceChat.resource, host));
+		disposables.add(service.registerHost(sourceChat.resource));
 
 		const shown = await service.show(session, sourceChat, sideChat, 'question');
 		service.collapse(sourceChat.resource);
@@ -91,7 +90,7 @@ suite('TransientSideChatService', () => {
 
 	test('clears transient state when the side chat opens through another surface', async () => {
 		const { service } = setup();
-		disposables.add(service.registerHost(sourceChat.resource, upcastPartial<ITransientSideChatHost>({ revealSource: () => true })));
+		disposables.add(service.registerHost(sourceChat.resource));
 		await service.show(session, sourceChat, sideChat, 'question');
 
 		service.removeBySideChat(sideChat.resource);
@@ -101,7 +100,7 @@ suite('TransientSideChatService', () => {
 
 	test('clears transient state when either referenced chat is deleted', async () => {
 		const { service, didDeleteChat } = setup();
-		disposables.add(service.registerHost(sourceChat.resource, upcastPartial<ITransientSideChatHost>({ revealSource: () => true })));
+		disposables.add(service.registerHost(sourceChat.resource));
 
 		await service.show(session, sourceChat, sideChat, 'question');
 		didDeleteChat.fire({ session, chatResource: sideChat.resource });
@@ -119,23 +118,4 @@ suite('TransientSideChatService', () => {
 		});
 	});
 
-	test('routes source reveal to the registered source view', async () => {
-		const { service } = setup();
-		let revealCalls = 0;
-		disposables.add(service.registerHost(sourceChat.resource, upcastPartial<ITransientSideChatHost>({
-			revealSource: () => {
-				revealCalls++;
-				return true;
-			},
-		})));
-		await service.show(session, sourceChat, sideChat, 'question');
-
-		assert.deepStrictEqual({
-			revealed: service.revealSource(sideChat.resource),
-			revealCalls,
-		}, {
-			revealed: true,
-			revealCalls: 1,
-		});
-	});
 });
