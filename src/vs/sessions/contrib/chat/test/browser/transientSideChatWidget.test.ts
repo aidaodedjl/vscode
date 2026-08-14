@@ -6,7 +6,7 @@
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { SessionStatus } from '../../../../services/sessions/common/session.js';
-import { getTransientSideChatCollapsedPresentation, getTransientSideChatExpandedPresentation, getTransientSideChatResponseHeight } from '../../browser/transientSideChatWidget.js';
+import { getTransientSideChatCollapsedPresentation, getTransientSideChatExpandedPresentation, getTransientSideChatResponseHeight, getTransientSideChatStatusAnnouncement } from '../../browser/transientSideChatWidget.js';
 
 suite('TransientSideChatWidget', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -53,6 +53,22 @@ suite('TransientSideChatWidget', () => {
 			tallAnswer: 320,
 			shortView: 128,
 			empty: 1,
+		});
+	});
+
+	test('announces side-question creation and terminal answer transitions once', () => {
+		assert.deepStrictEqual({
+			created: getTransientSideChatStatusAnnouncement(undefined, SessionStatus.InProgress, true),
+			completed: getTransientSideChatStatusAnnouncement(SessionStatus.InProgress, SessionStatus.Completed, false),
+			failed: getTransientSideChatStatusAnnouncement(SessionStatus.InProgress, SessionStatus.Error, false),
+			stillWorking: getTransientSideChatStatusAnnouncement(SessionStatus.InProgress, SessionStatus.InProgress, false),
+			alreadyComplete: getTransientSideChatStatusAnnouncement(SessionStatus.Completed, SessionStatus.Completed, false),
+		}, {
+			created: 'Side question asked',
+			completed: 'Side question answered',
+			failed: 'Side question failed',
+			stillWorking: undefined,
+			alreadyComplete: undefined,
 		});
 	});
 });

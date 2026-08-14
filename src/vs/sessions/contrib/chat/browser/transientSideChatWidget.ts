@@ -28,7 +28,7 @@ import { ChatWidget } from '../../../../workbench/contrib/chat/browser/widget/ch
 import { IChatModelReference, IChatService } from '../../../../workbench/contrib/chat/common/chatService/chatService.js';
 import { ChatAgentLocation } from '../../../../workbench/contrib/chat/common/constants.js';
 import { isResponseVM } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
-import { IChat, ISession, SessionStatus } from '../../../services/sessions/common/session.js';
+import { IChat, ISession, isActiveSessionStatus, SessionStatus } from '../../../services/sessions/common/session.js';
 import { activeSessionViewBackground, activeSessionViewForeground, agentsPanelBackground, inactiveSessionViewBackground } from '../../../common/theme.js';
 import { ITransientSideChatService, ITransientSideChatState } from './transientSideChatService.js';
 
@@ -52,6 +52,23 @@ export function getTransientSideChatResponseHeight(viewHeight: number, contentHe
 	const maxHeight = Math.max(MIN_RESPONSE_VIEWPORT_HEIGHT, Math.floor(viewHeight * RESPONSE_HEIGHT_RATIO));
 	const desiredHeight = Math.max(MIN_RESPONSE_VIEWPORT_HEIGHT, Math.ceil(contentHeight));
 	return Math.min(maxHeight, desiredHeight);
+}
+
+export function getTransientSideChatStatusAnnouncement(previousStatus: SessionStatus | undefined, status: SessionStatus, isNewSideChat: boolean): string | undefined {
+	if (isNewSideChat) {
+		return localize('transientSideChat.askedStatus', "Side question asked");
+	}
+	if (!isActiveSessionStatus(previousStatus ?? SessionStatus.Completed)) {
+		return undefined;
+	}
+	switch (status) {
+		case SessionStatus.Completed:
+			return localize('transientSideChat.answeredStatus', "Side question answered");
+		case SessionStatus.Error:
+			return localize('transientSideChat.failedStatus', "Side question failed");
+		default:
+			return undefined;
+	}
 }
 
 export function getTransientSideChatCollapsedPresentation(status: SessionStatus): {
@@ -125,6 +142,8 @@ export class TransientSideChatWidget extends Disposable {
 	private _active = true;
 	private _lastLayout: { readonly height: number; readonly width: number } | undefined;
 	private _lastCollapsedStatus: SessionStatus | undefined;
+	private _announcedSideChatResource: string | undefined;
+	private _lastSideChatStatus: SessionStatus | undefined;
 
 	constructor(
 		parent: HTMLElement,
@@ -273,6 +292,8 @@ export class TransientSideChatWidget extends Disposable {
 			this._card.classList.add('hidden');
 			this._collapsedButton.classList.add('hidden');
 			this._lastCollapsedStatus = undefined;
+			this._announcedSideChatResource = undefined;
+			this._lastSideChatStatus = undefined;
 			this._clearSideModel();
 			this._syncWidgetVisibility();
 			return;
@@ -287,6 +308,15 @@ export class TransientSideChatWidget extends Disposable {
 		this._questionText.textContent = state.question;
 
 		const status = state.sendFailed ? SessionStatus.Error : state.sideChat.status.read(reader);
+		const sideChatResource = state.sideChat.resource.toString();
+		const isNewSideChat = sideChatResource !== this._announcedSideChatResource;
+		const statusAnnouncement = getTransientSideChatStatusAnnouncement(this._lastSideChatStatus, status, isNewSideChat);
+		if (this._hostVisible && this._active && statusAnnouncement && (expanded || status === SessionStatus.Completed)) {
+			announceStatus(statusAnnouncement);
+		}
+		this._announcedSideChatResource = sideChatResource;
+		this._lastSideChatStatus = status;
+
 		const expandedPresentation = getTransientSideChatExpandedPresentation(status);
 		this._statusText.textContent = expandedPresentation.statusLabel;
 		this._statusText.classList.toggle('hidden', !expandedPresentation.statusLabel);
