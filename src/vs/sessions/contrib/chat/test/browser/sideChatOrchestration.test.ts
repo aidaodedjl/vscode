@@ -9,6 +9,7 @@ import { upcastPartial } from '../../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IChat, ISession } from '../../../../services/sessions/common/session.js';
 import { ISendRequestOptions, ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+import { ISessionsPartService } from '../../../../services/sessions/browser/sessionsPartService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { presentAndSendSideChat } from '../../browser/sideChatOrchestration.js';
 import { ITransientSideChatService } from '../../browser/transientSideChatService.js';
@@ -34,6 +35,11 @@ suite('SideChatOrchestration', () => {
 				calls.push(`open:${resource.toString()}`);
 			},
 		});
+		const sessionsPartService = upcastPartial<ISessionsPartService>({
+			getSessionView: () => upcastPartial<NonNullable<ReturnType<ISessionsPartService['getSessionView']>>>({
+				splitChatToSide: resource => calls.push(`split:${resource.toString()}`),
+			}),
+		});
 		const transientService = upcastPartial<ITransientSideChatService>({
 			show: async (_session, source, side, question) => {
 				calls.push(`show:${source.resource.toString()}:${side.resource.toString()}:${question}`);
@@ -41,13 +47,13 @@ suite('SideChatOrchestration', () => {
 			},
 			markSendFailed: sideChat => calls.push(`failed:${sideChat.toString()}`),
 		});
-		return { managementService, sessionsService, transientService, calls, sendOptions: () => sendOptions };
+		return { managementService, sessionsService, sessionsPartService, transientService, calls, sendOptions: () => sendOptions };
 	}
 
 	test('keeps a transient side chat out of visible navigation while awaiting its send', async () => {
-		const { managementService, sessionsService, transientService, calls, sendOptions } = setup(true);
+		const { managementService, sessionsService, sessionsPartService, transientService, calls, sendOptions } = setup(true);
 
-		await presentAndSendSideChat(managementService, sessionsService, transientService, session, sourceChat, sideChat, { query: 'question' });
+		await presentAndSendSideChat(managementService, sessionsService, sessionsPartService, transientService, session, sourceChat, sideChat, { query: 'question' });
 
 		assert.deepStrictEqual({
 			calls,
@@ -63,13 +69,13 @@ suite('SideChatOrchestration', () => {
 	});
 
 	test('marks a transient card failed when its awaited send rejects', async () => {
-		const { sessionsService, transientService, calls } = setup(true);
+		const { sessionsService, sessionsPartService, transientService, calls } = setup(true);
 		const managementService = upcastPartial<ISessionsManagementService>({
 			sendRequest: async () => { throw new Error('send failed'); },
 		});
 
 		await assert.rejects(
-			presentAndSendSideChat(managementService, sessionsService, transientService, session, sourceChat, sideChat, { query: 'question' }),
+			presentAndSendSideChat(managementService, sessionsService, sessionsPartService, transientService, session, sourceChat, sideChat, { query: 'question' }),
 			/send failed/,
 		);
 
@@ -80,9 +86,9 @@ suite('SideChatOrchestration', () => {
 	});
 
 	test('falls back to the normal full chat when no source view can host it', async () => {
-		const { managementService, sessionsService, transientService, calls, sendOptions } = setup(false);
+		const { managementService, sessionsService, sessionsPartService, transientService, calls, sendOptions } = setup(false);
 
-		await presentAndSendSideChat(managementService, sessionsService, transientService, session, sourceChat, sideChat, { query: 'question' });
+		await presentAndSendSideChat(managementService, sessionsService, sessionsPartService, transientService, session, sourceChat, sideChat, { query: 'question' });
 
 		assert.deepStrictEqual({
 			calls,
@@ -91,6 +97,7 @@ suite('SideChatOrchestration', () => {
 			calls: [
 				`show:${sourceChat.resource.toString()}:${sideChat.resource.toString()}:question`,
 				`open:${sideChat.resource.toString()}`,
+				`split:${sideChat.resource.toString()}`,
 				`send:${sideChat.resource.toString()}`,
 			],
 			preserveActiveChat: false,
