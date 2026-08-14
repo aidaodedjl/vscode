@@ -5,6 +5,7 @@
 
 import assert from 'assert';
 import * as dom from '../../../../../base/browser/dom.js';
+import { MarkdownString } from '../../../../../base/common/htmlContent.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { constObservable, observableValue } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -17,9 +18,11 @@ import { MockContextKeyService } from '../../../../../platform/keybinding/test/c
 import { ILogService, NullLogService } from '../../../../../platform/log/common/log.js';
 import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
 import { IChatService } from '../../../../../workbench/contrib/chat/common/chatService/chatService.js';
+import { ChatToolInvocation } from '../../../../../workbench/contrib/chat/common/model/chatProgressTypes/chatToolInvocation.js';
+import { ToolDataSource } from '../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { IChat, ISession, SessionStatus } from '../../../../services/sessions/common/session.js';
 import { ITransientSideChatService, ITransientSideChatState } from '../../browser/transientSideChatService.js';
-import { getTransientSideChatPresentation, getTransientSideChatResponseHeight, getTransientSideChatStatusAnnouncement, hasTransientSideChatResponseStarted, shouldDismissTransientSideChatFromSourceInput, shouldShowTransientSideChatProgress, TransientSideChatWidget } from '../../browser/transientSideChatWidget.js';
+import { getTransientSideChatModelActivity, getTransientSideChatPresentation, getTransientSideChatResponseHeight, getTransientSideChatStatusAnnouncement, shouldDismissTransientSideChatFromSourceInput, shouldShowTransientSideChatProgress, TransientSideChatWidget } from '../../browser/transientSideChatWidget.js';
 
 suite('TransientSideChatWidget', () => {
 	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
@@ -58,23 +61,37 @@ suite('TransientSideChatWidget', () => {
 		});
 	});
 
-	test('shows fallback progress only until renderable response content arrives', () => {
+	test('keeps fallback progress through pre-answer activity', () => {
 		assert.deepStrictEqual({
 			initialCompleted: shouldShowTransientSideChatProgress(SessionStatus.Completed, true),
 			working: shouldShowTransientSideChatProgress(SessionStatus.InProgress, true),
 			contentAlreadyObserved: shouldShowTransientSideChatProgress(SessionStatus.InProgress, false),
 			needsInput: shouldShowTransientSideChatProgress(SessionStatus.NeedsInput, true),
-			noBaseline: hasTransientSideChatResponseStarted(undefined, 38),
-			structuralRowUnchanged: hasTransientSideChatResponseStarted(10, 10),
-			responseGrew: hasTransientSideChatResponseStarted(10, 38),
 		}, {
 			initialCompleted: true,
 			working: true,
 			contentAlreadyObserved: false,
 			needsInput: false,
-			noBaseline: false,
-			structuralRowUnchanged: false,
-			responseGrew: true,
+		});
+	});
+
+	test('uses progress messages and tool calls as activity text', () => {
+		const tool = new ChatToolInvocation({
+			invocationMessage: 'Inspecting the current directory',
+			pastTenseMessage: 'Inspected the current directory',
+		}, {
+			id: 'test-tool',
+			displayName: 'Test Tool',
+			modelDescription: 'Test tool',
+			source: ToolDataSource.Internal,
+		}, 'tool-call', undefined, {}, {}, 'request');
+
+		assert.deepStrictEqual({
+			progress: getTransientSideChatModelActivity([{ kind: 'progressMessage', content: new MarkdownString('Starting services') }]),
+			tool: getTransientSideChatModelActivity([tool]),
+		}, {
+			progress: 'Starting services',
+			tool: 'Inspecting the current directory',
 		});
 	});
 
@@ -169,9 +186,11 @@ suite('TransientSideChatWidget', () => {
 		Reflect.set(widget, '_ensureSideModel', () => undefined);
 
 		const sourceChat = upcastPartial<IChat>({ resource: URI.parse('test:///source') });
+		const sideChatDescription = observableValue<MarkdownString | undefined>(disposables, undefined);
 		const sideChat = upcastPartial<IChat>({
 			resource: URI.parse('test:///side'),
 			status: constObservable(SessionStatus.Completed),
+			description: sideChatDescription,
 		});
 		const session = upcastPartial<ISession>({ sessionId: 'session' });
 		widget.setSource(sourceChat, session);
@@ -193,6 +212,8 @@ suite('TransientSideChatWidget', () => {
 		const progress = persistentContent.querySelector('.transient-side-chat-progress');
 		const progressVisibleWhileWorking = !progress?.classList.contains('hidden');
 		const progressUsesShimmer = !!progress?.querySelector('.transient-side-chat-progress-label') && !progress.querySelector('.codicon');
+		sideChatDescription.set(new MarkdownString('Starting MCP servers'), undefined);
+		const progressActivity = progress?.querySelector('.transient-side-chat-progress-label')?.textContent;
 		states.set([{ ...state, sendFailed: true }], undefined);
 		const progressHiddenAfterFailure = persistentContent.querySelector('.transient-side-chat-progress')?.classList.contains('hidden');
 		persistentContent.querySelector<HTMLElement>('.transient-side-chat-actions [aria-label="Close Side Question"]')?.click();
@@ -205,6 +226,7 @@ suite('TransientSideChatWidget', () => {
 			actionLabels,
 			progressVisibleWhileWorking,
 			progressUsesShimmer,
+			progressActivity,
 			progressHiddenAfterFailure,
 			removedSideChat: removedSideChats.at(-1),
 			hostHiddenAfterClose: persistentContent.querySelector('.transient-side-chat-host')?.classList.contains('hidden'),
@@ -218,6 +240,7 @@ suite('TransientSideChatWidget', () => {
 			actionLabels: ['Side question actions', 'Open Full Chat', 'Close Side Question'],
 			progressVisibleWhileWorking: true,
 			progressUsesShimmer: true,
+			progressActivity: 'Starting MCP servers',
 			progressHiddenAfterFailure: true,
 			removedSideChat: sideChat.resource.toString(),
 			hostHiddenAfterClose: true,

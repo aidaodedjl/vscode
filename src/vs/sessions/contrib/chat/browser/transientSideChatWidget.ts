@@ -5,6 +5,7 @@
 
 import './media/transientSideChat.css';
 import * as dom from '../../../../base/browser/dom.js';
+import { renderAsPlaintext } from '../../../../base/browser/markdownRenderer.js';
 import { Action } from '../../../../base/common/actions.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
@@ -28,10 +29,13 @@ import { EDITOR_DRAG_AND_DROP_BACKGROUND } from '../../../../workbench/common/th
 import { setModelPreservingInputTypedWhileLoading } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { ChatWidget } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { ChatCollapsibleContentPart } from '../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatCollapsibleContentPart.js';
-import { IChatModelReference, IChatService } from '../../../../workbench/contrib/chat/common/chatService/chatService.js';
+import { getFinalResponseStartIndex } from '../../../../workbench/contrib/chat/browser/widget/chatListRenderer.js';
+import { ChatMcpServersStarting, IChatModelReference, IChatService, IChatToolInvocation } from '../../../../workbench/contrib/chat/common/chatService/chatService.js';
 import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { ChatAgentLocation } from '../../../../workbench/contrib/chat/common/constants.js';
+import type { IChatProgressResponseContent } from '../../../../workbench/contrib/chat/common/model/chatModel.js';
 import { isResponseVM } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
+import { annotateSpecialMarkdownContent } from '../../../../workbench/contrib/chat/common/widget/annotations.js';
 import { IChat, ISession, isActiveSessionStatus, SessionStatus } from '../../../services/sessions/common/session.js';
 import { activeSessionViewBackground, activeSessionViewForeground, agentsPanelBackground, inactiveSessionViewBackground } from '../../../common/theme.js';
 import { ITransientSideChatService, ITransientSideChatState } from './transientSideChatService.js';
@@ -62,12 +66,46 @@ export function getTransientSideChatResponseHeight(viewHeight: number, contentHe
 	return Math.min(maxHeight, desiredHeight);
 }
 
-export function shouldShowTransientSideChatProgress(status: SessionStatus, waitingForFirstContent: boolean): boolean {
-	return waitingForFirstContent && status !== SessionStatus.NeedsInput && status !== SessionStatus.Error;
+export function shouldShowTransientSideChatProgress(status: SessionStatus, waitingForFinalResponse: boolean): boolean {
+	return waitingForFinalResponse && status !== SessionStatus.NeedsInput && status !== SessionStatus.Error;
 }
 
-export function hasTransientSideChatResponseStarted(emptyResponseHeight: number | undefined, responseHeight: number): boolean {
-	return emptyResponseHeight !== undefined && responseHeight > emptyResponseHeight;
+export function getTransientSideChatModelActivity(content: readonly IChatProgressResponseContent[]): string | undefined {
+	for (let index = content.length - 1; index >= 0; index--) {
+		const part = content[index];
+		if (part.kind === 'progressMessage') {
+			const text = renderAsPlaintext(part.content).trim();
+			if (text) {
+				return text;
+			}
+		}
+		if (part.kind === 'mcpServersStartingSlow' && part.servers.get().length > 0) {
+			return localize('transientSideChat.startingMcpServers', "Starting MCP servers...");
+		}
+		if (part instanceof ChatMcpServersStarting && part.state.get().working) {
+			return localize('transientSideChat.startingMcpServers', "Starting MCP servers...");
+		}
+		if (part.kind === 'toolInvocation' || part.kind === 'toolInvocationSerialized') {
+			const message = IChatToolInvocation.isComplete(part)
+				? part.pastTenseMessage ?? part.invocationMessage
+				: part.invocationMessage;
+			const text = typeof message === 'string' ? message.trim() : message ? renderAsPlaintext(message).trim() : '';
+			if (text) {
+				return text;
+			}
+		}
+	}
+	return undefined;
+}
+
+function hasTransientSideChatCompletedFinalResponse(widget: ChatWidget | undefined, sideChatResource: URI): boolean {
+	const viewModel = widget?.viewModel;
+	if (!viewModel || !isEqual(viewModel.sessionResource, sideChatResource)) {
+		return false;
+	}
+	return viewModel.getItems().some(item =>
+		isResponseVM(item) && item.isComplete && getFinalResponseStartIndex(annotateSpecialMarkdownContent(item.response.value)) !== undefined
+	);
 }
 
 export function getTransientSideChatStatusAnnouncement(previousStatus: SessionStatus | undefined, status: SessionStatus, isNewSideChat: boolean, replacedExisting: boolean): string | undefined {
@@ -144,6 +182,7 @@ export class TransientSideChatWidget extends Disposable {
 	private readonly _questionText: HTMLElement;
 	private readonly _statusText: HTMLElement;
 	private readonly _progress: HTMLElement;
+	private readonly _progressLabel: HTMLElement;
 	private readonly _widgetHost: HTMLElement;
 	private readonly _widget = this._register(new MutableDisposable<ChatWidget>());
 	private readonly _sourceContextKeyService: IContextKeyService;
@@ -157,6 +196,7 @@ export class TransientSideChatWidget extends Disposable {
 	private readonly _hostRegistration = this._register(new MutableDisposable());
 	private readonly _modelRef = this._register(new MutableDisposable<IChatModelReference>());
 	private readonly _loadCts = this._register(new MutableDisposable<CancellationTokenSource>());
+	private readonly _progressModelListener = this._register(new MutableDisposable());
 	private _currentSideChatResource: URI | undefined;
 	private _hostVisible = true;
 	private _active = true;
@@ -165,10 +205,10 @@ export class TransientSideChatWidget extends Disposable {
 	private _lastSideChatStatus: SessionStatus | undefined;
 	private _progressVisible = false;
 	private _progressSideChatResource: string | undefined;
-	private _waitingForFirstContent = false;
-	private _emptyResponseHeight: number | undefined;
+	private _waitingForFinalResponse = false;
 	private _fixedResponseHeight: number | undefined;
 	private _minimumResponseHeight = MIN_RESPONSE_VIEWPORT_HEIGHT;
+	private _chatActivity = '';
 
 	constructor(
 		parent: HTMLElement,
@@ -228,7 +268,12 @@ export class TransientSideChatWidget extends Disposable {
 		actions.push([this._promoteAction, this._closeAction], { icon: true, label: false });
 
 		this._progress = dom.append(this._card, dom.$('.transient-side-chat-progress.hidden'));
-		dom.append(this._progress, dom.$('span.transient-side-chat-progress-label', undefined, localize('transientSideChat.workingOnIt', "Working on it...")));
+		this._progressLabel = dom.append(this._progress, dom.$('span.transient-side-chat-progress-label'));
+		this._register(hoverService.setupManagedHover(
+			getDefaultHoverDelegate('element'),
+			this._progressLabel,
+			() => this._progressLabel.textContent ?? '',
+		));
 		this._widgetHost = dom.append(this._card, dom.$('.transient-side-chat-widget'));
 		this._register(dom.addDisposableListener(this._widgetHost, ChatCollapsibleContentPart.userToggleEvent, () => {
 			const widget = this._widget.value;
@@ -342,8 +387,8 @@ export class TransientSideChatWidget extends Disposable {
 			this._announcedSideChatResource = undefined;
 			this._lastSideChatStatus = undefined;
 			this._progressSideChatResource = undefined;
-			this._waitingForFirstContent = false;
-			this._emptyResponseHeight = undefined;
+			this._waitingForFinalResponse = false;
+			this._chatActivity = '';
 			this._fixedResponseHeight = undefined;
 			this._setProgressVisible(false);
 			this._clearSideModel();
@@ -358,11 +403,13 @@ export class TransientSideChatWidget extends Disposable {
 		this._questionText.textContent = state.question;
 
 		const status = state.sendFailed ? SessionStatus.Error : state.sideChat.status.read(reader);
+		const activity = state.sideChat.description.read(reader);
+		this._chatActivity = (activity && renderAsPlaintext(activity).trim()) || '';
+		this._updateProgressLabel();
 		const sideChatResource = state.sideChat.resource.toString();
 		if (this._progressSideChatResource !== sideChatResource) {
 			this._progressSideChatResource = sideChatResource;
-			this._waitingForFirstContent = true;
-			this._emptyResponseHeight = undefined;
+			this._waitingForFinalResponse = true;
 			this._fixedResponseHeight = undefined;
 		}
 		const isNewSideChat = sideChatResource !== this._announcedSideChatResource;
@@ -409,8 +456,12 @@ export class TransientSideChatWidget extends Disposable {
 			this._modelRef.value = ref;
 			setModelPreservingInputTypedWhileLoading(widget, inputBeforeLoad, () => widget.setModel(ref.object));
 			widget.scrollTop = 0;
-			this._observeResponseHeight();
+			this._progressModelListener.value = widget.viewModel?.onDidChange(() => {
+				this._updateProgressLabel();
+				this._updateProgress();
+			});
 			this.element.dataset.transientChatResource = resource.toString();
+			this._updateProgressLabel();
 			this._updateProgress();
 			this._syncWidgetVisibility();
 			if (this._lastLayout) {
@@ -460,7 +511,7 @@ export class TransientSideChatWidget extends Disposable {
 		widget.setInputVisible(false);
 		this._register(widget.holdAutoScroll());
 		this._register(widget.onDidChangeContentHeight(() => {
-			this._observeResponseHeight();
+			this._updateProgressLabel();
 			this._updateProgress();
 			if (this._lastLayout) {
 				this.layout(this._lastLayout.height, this._lastLayout.width);
@@ -473,21 +524,6 @@ export class TransientSideChatWidget extends Disposable {
 		return widget;
 	}
 
-	private _observeResponseHeight(): void {
-		const widget = this._widget.value;
-		if (!widget || !this._waitingForFirstContent) {
-			return;
-		}
-		const responseHeight = widget.scrollHeight;
-		if (this._emptyResponseHeight === undefined) {
-			if (responseHeight > 0) {
-				this._emptyResponseHeight = responseHeight;
-			}
-		} else if (hasTransientSideChatResponseStarted(this._emptyResponseHeight, responseHeight)) {
-			this._waitingForFirstContent = false;
-		}
-	}
-
 	private _updateProgress(status?: SessionStatus): void {
 		const state = this._state.get();
 		if (!state) {
@@ -495,7 +531,16 @@ export class TransientSideChatWidget extends Disposable {
 			return;
 		}
 		const currentStatus = status ?? (state.sendFailed ? SessionStatus.Error : state.sideChat.status.get());
-		this._setProgressVisible(shouldShowTransientSideChatProgress(currentStatus, this._waitingForFirstContent));
+		if (hasTransientSideChatCompletedFinalResponse(this._widget.value, state.sideChat.resource)) {
+			this._waitingForFinalResponse = false;
+		}
+		this._setProgressVisible(shouldShowTransientSideChatProgress(currentStatus, this._waitingForFinalResponse));
+	}
+
+	private _updateProgressLabel(): void {
+		const response = this._widget.value?.viewModel?.getItems().findLast(isResponseVM);
+		const modelActivity = response ? getTransientSideChatModelActivity(response.response.value) : undefined;
+		this._progressLabel.textContent = modelActivity || this._chatActivity || localize('transientSideChat.workingOnIt', "Working on it...");
 	}
 
 	private _setProgressVisible(visible: boolean): void {
@@ -513,6 +558,7 @@ export class TransientSideChatWidget extends Disposable {
 	private _clearSideModel(): void {
 		this._loadCts.value?.cancel();
 		this._loadCts.clear();
+		this._progressModelListener.clear();
 		this._currentSideChatResource = undefined;
 		this._widget.value?.setModel(undefined);
 		this._modelRef.clear();
