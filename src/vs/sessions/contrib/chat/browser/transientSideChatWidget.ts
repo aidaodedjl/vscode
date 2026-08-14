@@ -160,6 +160,7 @@ export class TransientSideChatWidget extends Disposable {
 		this.element = dom.append(parent, dom.$('.transient-side-chat-host.hidden'));
 		this._collapsedButton = dom.append(this.element, dom.$('button.transient-side-chat-collapsed.hidden', {
 			type: 'button',
+			'aria-expanded': 'false',
 		}));
 		this._collapsedIcon = createDecorativeIcon(Codicon.commentDiscussion);
 		this._collapsedButton.appendChild(this._collapsedIcon);
@@ -171,6 +172,7 @@ export class TransientSideChatWidget extends Disposable {
 			role: 'region',
 			tabindex: '-1',
 		}));
+		this._collapsedButton.setAttribute('aria-controls', cardId);
 
 		const header = dom.append(this._card, dom.$('.transient-side-chat-header'));
 		const heading = dom.append(header, dom.$('.transient-side-chat-heading'));
@@ -291,6 +293,7 @@ export class TransientSideChatWidget extends Disposable {
 		if (!state) {
 			this._card.classList.add('hidden');
 			this._collapsedButton.classList.add('hidden');
+			this._collapsedButton.setAttribute('aria-expanded', 'false');
 			this._lastCollapsedStatus = undefined;
 			this._announcedSideChatResource = undefined;
 			this._lastSideChatStatus = undefined;
@@ -302,6 +305,7 @@ export class TransientSideChatWidget extends Disposable {
 		const expanded = state.expanded || state.promoting;
 		this._card.classList.toggle('hidden', !expanded);
 		this._collapsedButton.classList.toggle('hidden', expanded);
+		this._collapsedButton.setAttribute('aria-expanded', String(expanded));
 		this._promoteAction.enabled = !state.promoting;
 		this._closeAction.enabled = !state.promoting;
 
