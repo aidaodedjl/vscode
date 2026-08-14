@@ -19,7 +19,7 @@ import { TestInstantiationService } from '../../../../../platform/instantiation/
 import { IChatService } from '../../../../../workbench/contrib/chat/common/chatService/chatService.js';
 import { IChat, ISession, SessionStatus } from '../../../../services/sessions/common/session.js';
 import { ITransientSideChatService, ITransientSideChatState } from '../../browser/transientSideChatService.js';
-import { getTransientSideChatCollapsedPresentation, getTransientSideChatExpandedPresentation, getTransientSideChatResponseHeight, getTransientSideChatStatusAnnouncement, shouldCollapseTransientSideChatFromSourceInput, TransientSideChatWidget } from '../../browser/transientSideChatWidget.js';
+import { getTransientSideChatCollapsedPresentation, getTransientSideChatExpandedPresentation, getTransientSideChatResponseHeight, getTransientSideChatStatusAnnouncement, hasTransientSideChatResponseStarted, shouldCollapseTransientSideChatFromSourceInput, shouldShowTransientSideChatProgress, TransientSideChatWidget } from '../../browser/transientSideChatWidget.js';
 
 suite('TransientSideChatWidget', () => {
 	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
@@ -66,6 +66,26 @@ suite('TransientSideChatWidget', () => {
 			tallAnswer: 550,
 			shortView: 190,
 			empty: 1,
+		});
+	});
+
+	test('shows fallback progress only until renderable response content arrives', () => {
+		assert.deepStrictEqual({
+			initialCompleted: shouldShowTransientSideChatProgress(SessionStatus.Completed, true),
+			working: shouldShowTransientSideChatProgress(SessionStatus.InProgress, true),
+			contentAlreadyObserved: shouldShowTransientSideChatProgress(SessionStatus.InProgress, false),
+			needsInput: shouldShowTransientSideChatProgress(SessionStatus.NeedsInput, true),
+			noBaseline: hasTransientSideChatResponseStarted(undefined, 38),
+			structuralRowUnchanged: hasTransientSideChatResponseStarted(10, 10),
+			responseGrew: hasTransientSideChatResponseStarted(10, 38),
+		}, {
+			initialCompleted: true,
+			working: true,
+			contentAlreadyObserved: false,
+			needsInput: false,
+			noBaseline: false,
+			structuralRowUnchanged: false,
+			responseGrew: true,
 		});
 	});
 
@@ -176,7 +196,10 @@ suite('TransientSideChatWidget', () => {
 		const actionLabels = [...persistentContent.querySelectorAll<HTMLElement>('.transient-side-chat-actions [aria-label]')]
 			.map(element => element.getAttribute('aria-label'));
 		const expandedCardHidden = card?.classList.contains('hidden');
-		states.set([{ ...state, expanded: false }], undefined);
+		const progressVisibleWhileWorking = !persistentContent.querySelector('.transient-side-chat-progress')?.classList.contains('hidden');
+		states.set([{ ...state, sendFailed: true }], undefined);
+		const progressHiddenAfterFailure = persistentContent.querySelector('.transient-side-chat-progress')?.classList.contains('hidden');
+		states.set([{ ...state, expanded: false, sendFailed: true }], undefined);
 		const collapsedButton = persistentContent.querySelector<HTMLElement>('.transient-side-chat-collapsed');
 
 		assert.deepStrictEqual({
@@ -185,6 +208,8 @@ suite('TransientSideChatWidget', () => {
 			expandedCardHidden,
 			question: card?.querySelector('.transient-side-chat-question')?.textContent,
 			actionLabels,
+			progressVisibleWhileWorking,
+			progressHiddenAfterFailure,
 			nestedComposerCount: persistentContent.querySelectorAll('.transient-side-chat-widget .interactive-input-part:not(.chat-input-hidden)').length,
 			collapsedExpanded: collapsedButton?.getAttribute('aria-expanded'),
 			collapsedControlsCard: collapsedButton?.getAttribute('aria-controls') === card?.id,
@@ -194,6 +219,8 @@ suite('TransientSideChatWidget', () => {
 			expandedCardHidden: false,
 			question: 'What changed?',
 			actionLabels: ['Side question actions', 'Open Full Chat', 'Close Side Question'],
+			progressVisibleWhileWorking: true,
+			progressHiddenAfterFailure: true,
 			nestedComposerCount: 0,
 			collapsedExpanded: 'false',
 			collapsedControlsCard: true,
