@@ -144,6 +144,12 @@ export interface ISessionsChangeEvent {
 	readonly changed: readonly ISession[];
 }
 
+/** Payload for {@link ISessionsManagementService.onWillSendRequest}. */
+export interface ISendRequestWillEvent {
+	readonly session: ISession;
+	readonly options: ISendRequestOptions;
+}
+
 /**
  * Payload for {@link ISessionsManagementService.onDidSendRequest}.
  */
@@ -309,10 +315,10 @@ export interface ISessionsManagementService {
 
 	/**
 	 * Fires immediately before a chat request is sent from this window via
-	 * {@link sendNewChatRequest} or {@link sendRequest}. Listeners can use this
-	 * to prewarm caches whose result is consumed by {@link onDidSendRequest}.
+	 * {@link sendNewChatRequest} or {@link sendRequest}. The exact options object
+	 * is repeated by {@link onDidSendRequest} for per-send correlation.
 	 */
-	readonly onWillSendRequest: Event<ISession>;
+	readonly onWillSendRequest: Event<ISendRequestWillEvent>;
 
 	/**
 	 * Fires after a chat request was successfully sent from this window via

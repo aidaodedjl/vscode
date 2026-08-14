@@ -66,7 +66,7 @@ export class SessionsTelemetryContribution extends Disposable implements IWorkbe
 
 		this._lifecycleTracker = this._register(new SessionsLifecycleTracker(this._storageService));
 
-		this._register(this._sessionsManagementService.onWillSendRequest(session => {
+		this._register(this._sessionsManagementService.onWillSendRequest(({ session }) => {
 			// Kick off the workspace file-count fetch now so it has time to
 			// resolve while the provider sends the request. The result is
 			// picked up under the (possibly updated) session id when

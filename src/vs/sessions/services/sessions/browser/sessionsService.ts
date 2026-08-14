@@ -18,7 +18,7 @@ import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uri
 import { IWorkspaceTrustRequestService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { localize } from '../../../../nls.js';
 import { ChatInteractivity, ChatOriginKind, IChat, ISession, SessionStatus } from '../common/session.js';
-import { IActiveSession, ICreateNewChatInSessionOptions, ICreateNewSessionOptions, inheritableSessionTarget, IRecentlyOpenedSessions, ISessionsChangeEvent, ISessionsManagementService, IToggleSessionStickinessEvent } from '../common/sessionsManagement.js';
+import { IActiveSession, ICreateNewChatInSessionOptions, ICreateNewSessionOptions, inheritableSessionTarget, IRecentlyOpenedSessions, ISendRequestOptions, ISessionsChangeEvent, ISessionsManagementService, IToggleSessionStickinessEvent } from '../common/sessionsManagement.js';
 import { ISessionsProvidersService } from './sessionsProvidersService.js';
 import { ClosedItemHistory } from './closedItemHistory.js';
 import { SessionsNavigation } from './sessionNavigation.js';
@@ -337,6 +337,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 
 	/** The in-flight foreground send's "keep newest chat active" follow. */
 	private readonly _sendFollow = this._register(new MutableDisposable<DisposableStore>());
+	private _sendFollowOptions: ISendRequestOptions | undefined;
 
 	constructor(
 		@IStorageService private readonly storageService: IStorageService,
@@ -444,8 +445,17 @@ export class SessionsService extends Disposable implements ISessionsService {
 
 		// While a foreground send materialises new chats, keep the newest chat
 		// active in the visible slot so the user sees the chat being sent.
-		this._register(this.sessionsManagementService.onWillSendRequest(session => this._startSendFollow(session)));
-		this._register(this.sessionsManagementService.onDidSendRequest(() => this._sendFollow.clear()));
+		this._register(this.sessionsManagementService.onWillSendRequest(({ session, options }) => {
+			if (!options.preserveActiveChat) {
+				this._startSendFollow(session, options);
+			}
+		}));
+		this._register(this.sessionsManagementService.onDidSendRequest(({ options }) => {
+			if (options === this._sendFollowOptions) {
+				this._sendFollowOptions = undefined;
+				this._sendFollow.clear();
+			}
+		}));
 
 		// Drive the part: reconcile the grid and move focus into the active
 		// session whenever the visible sessions or the active session change.
@@ -574,7 +584,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		}
 	}
 
-	private _startSendFollow(session: ISession): void {
+	private _startSendFollow(session: ISession, options: ISendRequestOptions): void {
 		const store = new DisposableStore();
 		let followId = session.sessionId;
 		// A foreground send can replace the session id (draft graduating into a
@@ -594,6 +604,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 				}
 			}
 		}));
+		this._sendFollowOptions = options;
 		this._sendFollow.value = store;
 	}
 

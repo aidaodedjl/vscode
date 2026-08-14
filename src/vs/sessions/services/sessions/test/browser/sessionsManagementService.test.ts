@@ -35,7 +35,7 @@ import { SessionTypeAuthRequirement, ChatInteractivity, ChatOriginKind, IChat, I
 import { ILanguageModelChatMetadataAndIdentifier } from '../../../../../workbench/contrib/chat/common/languageModels.js';
 import { ISessionChangeEvent, ISendRequestOptions, ISessionModelsSnapshot, ISessionModelPickerOptions, ISessionsProvider, ISessionsProviderCreateSessionOptions, ISessionWorktreeConfiguration } from '../../common/sessionsProvider.js';
 import { SessionsManagementService } from '../../browser/sessionsManagementService.js';
-import { ISessionsManagementService, ICreateNewSessionOptions, inheritableSessionTarget, ISendRequestSentEvent, WorkspaceNotTrustedError } from '../../common/sessionsManagement.js';
+import { ISessionsManagementService, ICreateNewSessionOptions, inheritableSessionTarget, ISendRequestOptions as IManagementSendRequestOptions, ISendRequestSentEvent, WorkspaceNotTrustedError } from '../../common/sessionsManagement.js';
 import { SessionsService } from '../../browser/sessionsService.js';
 import { ISessionsPartService } from '../../browser/sessionsPartService.js';
 import { CustomViewService, ICustomViewService } from '../../../customView/browser/customViewService.js';
@@ -1028,7 +1028,7 @@ suite('SessionsManagementService', () => {
 		completeSendRequest?.();
 	});
 
-	test('sendRequest with preserveActiveChat remains awaited and does not fire onWillSendRequest', async () => {
+	test('sendRequest with preserveActiveChat remains awaited and fires the send lifecycle', async () => {
 		const chat: IChat = { ...stubChat, resource: URI.parse('test:///chat') };
 		const session = stubSession({
 			sessionId: 's1',
@@ -1045,12 +1045,13 @@ suite('SessionsManagementService', () => {
 			}
 		}(session);
 		const { service } = createSessionsManagementService(session, disposables, provider);
-		let willSendCount = 0;
-		disposables.add(service.onWillSendRequest(() => willSendCount++));
+		let willSendOptions: IManagementSendRequestOptions | undefined;
+		disposables.add(service.onWillSendRequest(event => willSendOptions = event.options));
 
-		await service.sendRequest(session, chat, { query: 'hi', preserveActiveChat: true });
+		const options: IManagementSendRequestOptions = { query: 'hi', preserveActiveChat: true };
+		await service.sendRequest(session, chat, options);
 
-		assert.deepStrictEqual({ providerCompleted, willSendCount }, { providerCompleted: true, willSendCount: 0 });
+		assert.deepStrictEqual({ providerCompleted, sameOptions: willSendOptions === options }, { providerCompleted: true, sameOptions: true });
 	});
 
 	test('mirrored follow-up requests preserve submitted attachments', () => {

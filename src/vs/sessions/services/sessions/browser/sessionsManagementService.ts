@@ -22,7 +22,7 @@ import { IChatRequestVariableEntry } from '../../../../workbench/contrib/chat/co
 import { IPathService } from '../../../../workbench/services/path/common/pathService.js';
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
 import { getSessionReferenceResource } from './sessionReference.js';
-import { ICreateNewChatInSessionOptions, ICreateNewSessionOptions, IDeferredNewSessionRequestOptions, IProviderSessionType, ISendRequestOptions, ISendRequestSentEvent, ISessionsChangeEvent, ISessionsManagementService, NewSessionRequestOptions, WorkspaceNotTrustedError } from '../common/sessionsManagement.js';
+import { ICreateNewChatInSessionOptions, ICreateNewSessionOptions, IDeferredNewSessionRequestOptions, IProviderSessionType, ISendRequestOptions, ISendRequestSentEvent, ISendRequestWillEvent, ISessionsChangeEvent, ISessionsManagementService, NewSessionRequestOptions, WorkspaceNotTrustedError } from '../common/sessionsManagement.js';
 import { ISessionsProvidersChangeEvent, ISessionsProvidersService } from './sessionsProvidersService.js';
 import { IDeleteChatOptions, ISessionChangeEvent, ISessionsProvider } from '../common/sessionsProvider.js';
 import { IChat, ISession, ISessionWorkspace, ISideChatSelection, SessionStatus, ISessionType } from '../common/session.js';
@@ -43,8 +43,8 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	private readonly _onDidStartSession = this._register(new Emitter<ISession>());
 	readonly onDidStartSession: Event<ISession> = this._onDidStartSession.event;
 
-	private readonly _onWillSendRequest = this._register(new Emitter<ISession>());
-	readonly onWillSendRequest: Event<ISession> = this._onWillSendRequest.event;
+	private readonly _onWillSendRequest = this._register(new Emitter<ISendRequestWillEvent>());
+	readonly onWillSendRequest: Event<ISendRequestWillEvent> = this._onWillSendRequest.event;
 	private readonly _onDidSendRequest = this._register(new Emitter<ISendRequestSentEvent>());
 	readonly onDidSendRequest: Event<ISendRequestSentEvent> = this._onDidSendRequest.event;
 
@@ -708,7 +708,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		// fires this from within `_sendNewChatRequestInBackground`. The view
 		// service observes the will/did send pair to keep the newest chat
 		// active in the visible slot while the send materialises.
-		this._onWillSendRequest.fire(session);
+		this._onWillSendRequest.fire({ session, options });
 
 		// Ask the provider to create the new chat, then send the request.
 		const chat = await provider.createNewChat(session.sessionId, options.query);
@@ -941,7 +941,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		}
 		// Notify listeners (e.g., telemetry) that a send is starting so they can
 		// prewarm caches whose result is consumed when `onDidSendRequest` fires.
-		this._onWillSendRequest.fire(session);
+		this._onWillSendRequest.fire({ session, options });
 		const chatPromise = provider.createNewChat(session.sessionId, options.query);
 		const chat = token === CancellationToken.None ? await chatPromise : await raceCancellationError(chatPromise, token);
 
@@ -994,12 +994,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			return;
 		}
 
-		// The view service observes the will/did pair to keep a foreground send's
-		// chat active. Transient side chats remain awaited but deliberately skip
-		// that navigation until the user promotes them.
-		if (!options.preserveActiveChat) {
-			this._onWillSendRequest.fire(session);
-		}
+		this._onWillSendRequest.fire({ session, options });
 
 		const sendOptions = this._augmentOptionsForTroubleshoot(session, options);
 		const chatResourceKey = chat.resource.toString();
