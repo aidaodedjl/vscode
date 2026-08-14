@@ -58,7 +58,6 @@ interface ITurnTiming {
 	readonly permissionLevel: string | undefined;
 	readonly interactionMode: SessionMode | undefined;
 	firstProgressMs: number | undefined;
-	billedNanoAiu: number | undefined;
 
 	// Hang watchdog state
 	/** Reset on every observed activity; measures the current quiet period. */
@@ -82,6 +81,10 @@ interface ITurnTiming {
 	lastHangStopWatch: StopWatch | undefined;
 	/** Consecutive quiet windows the watchdog has observed. */
 	quietWindows: number;
+}
+
+interface ITurnUsage {
+	billedNanoAiu?: number;
 }
 
 /**
@@ -108,6 +111,7 @@ interface ITurnTiming {
 export class AgentHostTurnTracker extends Disposable {
 
 	private readonly _turnTimings = new Map<string, ITurnTiming>();
+	private readonly _turnUsages = new Map<string, ITurnUsage>();
 	private readonly _hangWatchdogs = this._register(new DisposableMap<string>());
 	/** Maps `session:requestId` to the turn key blocked on that request. */
 	private readonly _blockerTurnKeys = new Map<string, string>();
@@ -129,6 +133,7 @@ export class AgentHostTurnTracker extends Disposable {
 		super();
 		this._register(toDisposable(() => {
 			this._turnTimings.clear();
+			this._turnUsages.clear();
 			this._blockerTurnKeys.clear();
 		}));
 	}
@@ -146,7 +151,6 @@ export class AgentHostTurnTracker extends Disposable {
 			permissionLevel,
 			interactionMode,
 			firstProgressMs: undefined,
-			billedNanoAiu: undefined,
 			quietStopWatch: StopWatch.create(false),
 			lastActivityKind: TURN_ACTIVITY_NONE,
 			inFlightToolCalls: new Map(),
@@ -157,6 +161,7 @@ export class AgentHostTurnTracker extends Disposable {
 			lastHangStopWatch: undefined,
 			quietWindows: 0,
 		});
+		this._turnUsages.set(key, {});
 		this._armHangWatchdog(key);
 		this._onDidStartTurn.fire(provider);
 	}
@@ -289,9 +294,9 @@ export class AgentHostTurnTracker extends Disposable {
 	}
 
 	updateBilledNanoAiu(session: string, turnId: string, billedNanoAiu: number | undefined): void {
-		const timing = this._turnTimings.get(this._key(session, turnId));
-		if (timing && typeof billedNanoAiu === 'number' && Number.isFinite(billedNanoAiu) && billedNanoAiu >= 0) {
-			timing.billedNanoAiu = billedNanoAiu;
+		const usage = this._turnUsages.get(this._key(session, turnId));
+		if (usage && typeof billedNanoAiu === 'number' && Number.isFinite(billedNanoAiu) && billedNanoAiu >= 0) {
+			usage.billedNanoAiu = billedNanoAiu;
 		}
 	}
 
@@ -306,6 +311,7 @@ export class AgentHostTurnTracker extends Disposable {
 		if (!timing) {
 			return;
 		}
+		const usage = this._turnUsages.get(key);
 		this._disposeTurn(key, timing);
 
 		this._reporter.turnCompleted({
@@ -323,7 +329,7 @@ export class AgentHostTurnTracker extends Disposable {
 			failure,
 			isMultiRoot: workspace?.isMultiRoot ?? false,
 			folderCount: workspace?.folderCount ?? 0,
-			billedNanoAiu: timing.billedNanoAiu,
+			billedNanoAiu: usage?.billedNanoAiu,
 		});
 
 		// Paired recovery event: the turn was reported as hung but did finish,
@@ -344,8 +350,8 @@ export class AgentHostTurnTracker extends Disposable {
 
 	/**
 	 * Drops any in-flight (never-completed) turns for a session without
-	 * reporting them. Called on session teardown so neither the timing map nor
-	 * the watchdog timers can outlive the session they describe.
+	 * reporting them. Called on session teardown so neither tracked turn state
+	 * nor watchdog timers can outlive the session they describe.
 	 */
 	clearSession(session: string): void {
 		const prefix = `${session}\0`;
@@ -378,6 +384,7 @@ export class AgentHostTurnTracker extends Disposable {
 
 	private _disposeTurn(key: string, timing: ITurnTiming): void {
 		this._turnTimings.delete(key);
+		this._turnUsages.delete(key);
 		this._hangWatchdogs.deleteAndDispose(key);
 		for (const requestId of timing.blockers.keys()) {
 			this._blockerTurnKeys.delete(this._key(timing.session, requestId));
