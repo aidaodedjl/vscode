@@ -57,6 +57,15 @@ export class TransientSideChatService extends Disposable implements ITransientSi
 				this._states.set(next, undefined);
 			}
 		}));
+		this._register(sessionsManagementService.onDidDeleteChat(({ chatResource }) => {
+			const key = chatResource.toString();
+			const next = this._states.get().filter(state =>
+				state.sourceChat.resource.toString() !== key && state.sideChat.resource.toString() !== key
+			);
+			if (next.length !== this._states.get().length) {
+				this._states.set(next, undefined);
+			}
+		}));
 	}
 
 	registerHost(sourceChat: URI, host: ITransientSideChatHost): IDisposable {

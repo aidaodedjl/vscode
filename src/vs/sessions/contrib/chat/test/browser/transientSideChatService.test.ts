@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
-import { Event } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { constObservable } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { upcastPartial } from '../../../../../base/test/common/mock.js';
@@ -29,6 +29,7 @@ suite('TransientSideChatService', () => {
 
 	function setup() {
 		const calls: string[] = [];
+		const didDeleteChat = disposables.add(new Emitter<{ session: ISession; chatResource: URI }>());
 		const sessionsService = upcastPartial<ISessionsService>({
 			closeChat: async (_session, chat, options) => {
 				calls.push(`close:${chat.resource.toString()}:${options?.skipHistory}`);
@@ -37,8 +38,11 @@ suite('TransientSideChatService', () => {
 				calls.push(`open:${chatResource.toString()}`);
 			},
 		});
-		const managementService = upcastPartial<ISessionsManagementService>({ onDidDeleteSession: Event.None });
-		return { service: disposables.add(new TransientSideChatService(sessionsService, managementService)), calls };
+		const managementService = upcastPartial<ISessionsManagementService>({
+			onDidDeleteSession: Event.None,
+			onDidDeleteChat: didDeleteChat.event,
+		});
+		return { service: disposables.add(new TransientSideChatService(sessionsService, managementService)), calls, didDeleteChat };
 	}
 
 	test('falls back when the source chat has no live host', async () => {
@@ -93,6 +97,26 @@ suite('TransientSideChatService', () => {
 		service.removeBySideChat(sideChat.resource);
 
 		assert.deepStrictEqual(service.states.get(), []);
+	});
+
+	test('clears transient state when either referenced chat is deleted', async () => {
+		const { service, didDeleteChat } = setup();
+		disposables.add(service.registerHost(sourceChat.resource, upcastPartial<ITransientSideChatHost>({ revealSource: () => true })));
+
+		await service.show(session, sourceChat, sideChat, 'question');
+		didDeleteChat.fire({ session, chatResource: sideChat.resource });
+		const afterSideChatDelete = service.states.get();
+
+		await service.show(session, sourceChat, sideChat, 'question');
+		didDeleteChat.fire({ session, chatResource: sourceChat.resource });
+
+		assert.deepStrictEqual({
+			afterSideChatDelete,
+			afterSourceChatDelete: service.states.get(),
+		}, {
+			afterSideChatDelete: [],
+			afterSourceChatDelete: [],
+		});
 	});
 
 	test('routes source reveal to the registered source view', async () => {
