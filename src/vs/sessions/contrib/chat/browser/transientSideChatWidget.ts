@@ -51,7 +51,7 @@ interface ITransientSideChatSourceWidget {
 let transientSideChatIdPool = 0;
 
 const MIN_RESPONSE_VIEWPORT_HEIGHT = 1;
-const RESPONSE_HEIGHT_RATIO = 0.32;
+const SIDE_QUESTION_MAX_HEIGHT_RATIO = 0.6;
 const CHAT_CONTENT_MAX_WIDTH = 950;
 const CHAT_INPUT_HORIZONTAL_INSET = 64;
 
@@ -59,8 +59,8 @@ function createDecorativeIcon(icon: ThemeIcon): HTMLElement {
 	return dom.$(`span${ThemeIcon.asCSSSelector(icon)}`, { 'aria-hidden': 'true' });
 }
 
-export function getTransientSideChatResponseHeight(viewHeight: number, contentHeight: number): number {
-	const maxHeight = Math.max(MIN_RESPONSE_VIEWPORT_HEIGHT, Math.floor(viewHeight * RESPONSE_HEIGHT_RATIO));
+export function getTransientSideChatResponseHeight(viewHeight: number, contentHeight: number, cardChromeHeight = 0): number {
+	const maxHeight = Math.max(MIN_RESPONSE_VIEWPORT_HEIGHT, Math.floor(viewHeight * SIDE_QUESTION_MAX_HEIGHT_RATIO) - Math.ceil(cardChromeHeight));
 	const desiredHeight = Math.max(MIN_RESPONSE_VIEWPORT_HEIGHT, Math.ceil(contentHeight));
 	return Math.min(maxHeight, desiredHeight);
 }
@@ -152,6 +152,7 @@ export class TransientSideChatWidget extends Disposable {
 	readonly element: HTMLElement;
 
 	private readonly _card: HTMLElement;
+	private readonly _header: HTMLElement;
 	private readonly _collapsedButton: HTMLButtonElement;
 	private readonly _collapsedIcon: HTMLElement;
 	private readonly _collapsedLabel: HTMLElement;
@@ -209,8 +210,8 @@ export class TransientSideChatWidget extends Disposable {
 		}));
 		this._collapsedButton.setAttribute('aria-controls', cardId);
 
-		const header = dom.append(this._card, dom.$('.transient-side-chat-header'));
-		const heading = dom.append(header, dom.$('.transient-side-chat-heading'));
+		this._header = dom.append(this._card, dom.$('.transient-side-chat-header'));
+		const heading = dom.append(this._header, dom.$('.transient-side-chat-heading'));
 		const title = dom.append(heading, dom.$('.transient-side-chat-title', undefined, localize('transientSideChat.title', "Side question")));
 		this._questionText = dom.append(heading, dom.$('.transient-side-chat-question'));
 		this._statusText = dom.append(heading, dom.$('.transient-side-chat-status.hidden'));
@@ -224,7 +225,7 @@ export class TransientSideChatWidget extends Disposable {
 			() => this._questionText.textContent ?? '',
 		));
 
-		const actions = this._register(new ActionBar(header, {
+		const actions = this._register(new ActionBar(this._header, {
 			ariaLabel: localize('transientSideChat.actions', "Side question actions"),
 		}));
 		actions.getContainer().classList.add('transient-side-chat-actions');
@@ -337,7 +338,7 @@ export class TransientSideChatWidget extends Disposable {
 		if (!widget) {
 			return;
 		}
-		const widgetHeight = getTransientSideChatResponseHeight(height, widget.contentHeight - widget.inputPart.height.get());
+		const widgetHeight = getTransientSideChatResponseHeight(height, widget.scrollHeight, this._header.offsetHeight);
 		const widgetWidth = this._widgetHost.clientWidth || Math.max(0, Math.min(width - CHAT_INPUT_HORIZONTAL_INSET, CHAT_CONTENT_MAX_WIDTH));
 		widget.layout(widgetHeight, widgetWidth);
 	}
@@ -465,6 +466,7 @@ export class TransientSideChatWidget extends Disposable {
 				supportsChangingModes: false,
 				isSessionsWindow: true,
 				enableChatPet: false,
+				renderScrollToBottomButton: false,
 			},
 			this._buildStyles(),
 		);

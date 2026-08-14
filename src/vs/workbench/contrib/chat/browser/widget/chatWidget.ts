@@ -1925,6 +1925,7 @@ export class ChatWidget extends Disposable implements IChatWidget {
 				location: this.location,
 				getSelectedModelRequestOptions: () => this.getSelectedModelRequestOptions(),
 				getCurrentModeInfo: () => this.input.currentModeInfo,
+				renderScrollToBottomButton: this.viewOptions.renderScrollToBottomButton,
 			}
 		));
 

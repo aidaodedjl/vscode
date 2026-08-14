@@ -352,6 +352,8 @@ export interface IChatWidgetViewOptions {
 	enableFind?: boolean;
 	/** Whether this widget may render the chat pet. Defaults to true. */
 	enableChatPet?: boolean;
+	/** Whether this widget renders the transcript's scroll-to-bottom button. Defaults to true. */
+	renderScrollToBottomButton?: boolean;
 }
 
 export interface IChatViewViewContext {

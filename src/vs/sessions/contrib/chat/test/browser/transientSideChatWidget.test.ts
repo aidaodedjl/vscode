@@ -57,14 +57,14 @@ suite('TransientSideChatWidget', () => {
 
 	test('uses natural response height up to a view-relative cap', () => {
 		assert.deepStrictEqual({
-			shortAnswer: getTransientSideChatResponseHeight(1000, 28),
-			tallAnswer: getTransientSideChatResponseHeight(1000, 500),
-			shortView: getTransientSideChatResponseHeight(400, 500),
-			empty: getTransientSideChatResponseHeight(1000, 0),
+			shortAnswer: getTransientSideChatResponseHeight(1000, 28, 50),
+			tallAnswer: getTransientSideChatResponseHeight(1000, 700, 50),
+			shortView: getTransientSideChatResponseHeight(400, 500, 50),
+			empty: getTransientSideChatResponseHeight(1000, 0, 50),
 		}, {
 			shortAnswer: 28,
-			tallAnswer: 320,
-			shortView: 128,
+			tallAnswer: 550,
+			shortView: 190,
 			empty: 1,
 		});
 	});

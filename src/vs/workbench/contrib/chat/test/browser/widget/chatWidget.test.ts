@@ -138,6 +138,67 @@ suite('ChatWidget', () => {
 		]);
 	});
 
+	test('hidden input stays out of layout unless persistent content is visible', () => {
+		const workbench = document.createElement('div');
+		workbench.className = 'agent-sessions-workbench';
+		const sessionsPart = document.createElement('div');
+		sessionsPart.className = 'part sessionspart';
+		const session = document.createElement('div');
+		session.className = 'interactive-session';
+		const input = document.createElement('div');
+		input.className = 'interactive-input-part chat-input-hidden';
+		const persistentContent = document.createElement('div');
+		persistentContent.className = 'chat-input-persistent-content';
+		const toolConfirmation = document.createElement('div');
+		toolConfirmation.className = 'chat-tool-confirmation-carousel-container';
+		toolConfirmation.setAttribute('aria-hidden', 'true');
+		input.append(persistentContent, toolConfirmation);
+		const compactInput = document.createElement('div');
+		compactInput.className = 'interactive-input-part compact chat-input-hidden';
+		const compactPersistentContent = document.createElement('div');
+		compactPersistentContent.className = 'chat-input-persistent-content';
+		const compactInputAndEditSession = document.createElement('div');
+		compactInputAndEditSession.className = 'interactive-input-and-edit-session';
+		const compactToolConfirmation = document.createElement('div');
+		compactToolConfirmation.className = 'chat-tool-confirmation-carousel-container';
+		compactToolConfirmation.setAttribute('aria-hidden', 'true');
+		compactInputAndEditSession.append(compactToolConfirmation);
+		compactInput.append(compactPersistentContent, compactInputAndEditSession);
+		session.append(input, compactInput);
+		sessionsPart.append(session);
+		workbench.append(sessionsPart);
+		document.body.append(workbench);
+
+		try {
+			const getDisplay = () => session.ownerDocument.defaultView?.getComputedStyle(input).display;
+			const emptyDisplay = getDisplay();
+			const compactEmptyDisplay = session.ownerDocument.defaultView?.getComputedStyle(compactInput).display;
+			toolConfirmation.removeAttribute('aria-hidden');
+			const confirmationDisplay = getDisplay();
+			toolConfirmation.setAttribute('aria-hidden', 'true');
+			persistentContent.append(document.createElement('div'));
+			const persistentContentDisplay = getDisplay();
+			compactPersistentContent.append(document.createElement('div'));
+			const compactPersistentContentDisplay = session.ownerDocument.defaultView?.getComputedStyle(compactInput).display;
+
+			assert.deepStrictEqual({
+				emptyDisplay,
+				compactEmptyDisplay,
+				confirmationDisplay,
+				persistentContentDisplay,
+				compactPersistentContentDisplay,
+			}, {
+				emptyDisplay: 'none',
+				compactEmptyDisplay: 'none',
+				confirmationDisplay: 'flex',
+				persistentContentDisplay: 'flex',
+				compactPersistentContentDisplay: 'flex',
+			});
+		} finally {
+			workbench.remove();
+		}
+	});
+
 	test('captures and restores transcript scroll state', () => {
 		const listWidget = {
 			scrollTop: 200,
