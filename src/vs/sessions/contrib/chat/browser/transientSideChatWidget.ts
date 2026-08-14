@@ -239,7 +239,6 @@ export class TransientSideChatWidget extends Disposable {
 
 		const expanded = state.expanded || state.promoting;
 		this._card.classList.toggle('hidden', !expanded);
-		this._card.classList.toggle('promoting', state.promoting);
 		this._collapsedButton.classList.toggle('hidden', expanded);
 		this._promoteAction.enabled = !state.promoting;
 		this._closeAction.enabled = !state.promoting;
@@ -258,9 +257,7 @@ export class TransientSideChatWidget extends Disposable {
 		}
 		this._lastCollapsedStatus = status;
 
-		if (state.promoting) {
-			this._clearSideModel();
-		} else if (expanded) {
+		if (expanded) {
 			this._ensureSideModel(state);
 		}
 		this._syncWidgetVisibility();
@@ -353,7 +350,7 @@ export class TransientSideChatWidget extends Disposable {
 
 	private _syncWidgetVisibility(): void {
 		const state = this._state.get();
-		this._widget.value?.setVisible(this._hostVisible && !!state?.expanded && !state.promoting);
+		this._widget.value?.setVisible(this._hostVisible && !!state && (state.expanded || state.promoting));
 	}
 
 	private _expand(): void {

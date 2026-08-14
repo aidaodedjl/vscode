@@ -116,11 +116,18 @@ export class TransientSideChatService extends Disposable implements ITransientSi
 		}
 
 		this._setState({ ...state, promoting: true });
+		const sideChatResource = state.sideChat.resource.toString();
 		try {
 			await this.sessionsService.openChat(state.session, state.sideChat.resource);
-			this._remove(sourceChat);
+			const current = this._getState(sourceChat);
+			if (current?.sideChat.resource.toString() === sideChatResource && current.promoting) {
+				this._remove(sourceChat);
+			}
 		} catch (error) {
-			this._setState({ ...state, promoting: false });
+			const current = this._getState(sourceChat);
+			if (current?.sideChat.resource.toString() === sideChatResource && current.promoting) {
+				this._setState({ ...current, promoting: false });
+			}
 			throw error;
 		}
 	}

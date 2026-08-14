@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { constObservable } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -27,7 +28,7 @@ suite('TransientSideChatService', () => {
 		resource: URI.parse('test:///session'),
 	});
 
-	function setup() {
+	function setup(onOpenChat?: () => Promise<void>) {
 		const calls: string[] = [];
 		const didDeleteChat = disposables.add(new Emitter<{ session: ISession; chatResource: URI }>());
 		const sessionsService = upcastPartial<ISessionsService>({
@@ -36,6 +37,7 @@ suite('TransientSideChatService', () => {
 			},
 			openChat: async (_session, chatResource) => {
 				calls.push(`open:${chatResource.toString()}`);
+				await onOpenChat?.();
 			},
 		});
 		const managementService = upcastPartial<ISessionsManagementService>({
@@ -116,6 +118,52 @@ suite('TransientSideChatService', () => {
 			afterSideChatDelete: [],
 			afterSourceChatDelete: [],
 		});
+	});
+
+	test('successful promotion does not remove a newer transient question', async () => {
+		const openChat = new DeferredPromise<void>();
+		const { service } = setup(() => openChat.p);
+		const replacement = upcastPartial<IChat>({ resource: URI.parse('test:///chat/replacement') });
+		disposables.add(service.registerHost(sourceChat.resource));
+		await service.show(session, sourceChat, sideChat, 'first');
+
+		const promotion = service.promote(sourceChat.resource);
+		await service.show(session, sourceChat, replacement, 'second');
+		openChat.complete();
+		await promotion;
+
+		assert.deepStrictEqual(service.states.get().map(state => ({
+			sideChat: state.sideChat.resource.toString(),
+			question: state.question,
+			promoting: state.promoting,
+		})), [{
+			sideChat: replacement.resource.toString(),
+			question: 'second',
+			promoting: false,
+		}]);
+	});
+
+	test('failed promotion does not restore stale state over a newer question', async () => {
+		const openChat = new DeferredPromise<void>();
+		const { service } = setup(() => openChat.p);
+		const replacement = upcastPartial<IChat>({ resource: URI.parse('test:///chat/replacement') });
+		disposables.add(service.registerHost(sourceChat.resource));
+		await service.show(session, sourceChat, sideChat, 'first');
+
+		const promotion = service.promote(sourceChat.resource);
+		await service.show(session, sourceChat, replacement, 'second');
+		openChat.error(new Error('open failed'));
+		await assert.rejects(promotion, /open failed/);
+
+		assert.deepStrictEqual(service.states.get().map(state => ({
+			sideChat: state.sideChat.resource.toString(),
+			question: state.question,
+			promoting: state.promoting,
+		})), [{
+			sideChat: replacement.resource.toString(),
+			question: 'second',
+			promoting: false,
+		}]);
 	});
 
 });
