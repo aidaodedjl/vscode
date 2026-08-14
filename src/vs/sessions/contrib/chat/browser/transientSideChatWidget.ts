@@ -269,6 +269,7 @@ export class TransientSideChatWidget extends Disposable {
 		if (!state) {
 			this._card.classList.add('hidden');
 			this._collapsedButton.classList.add('hidden');
+			this._lastCollapsedStatus = undefined;
 			this._clearSideModel();
 			this._syncWidgetVisibility();
 			return;
@@ -296,10 +297,12 @@ export class TransientSideChatWidget extends Disposable {
 		this._collapsedButton.classList.toggle('error', collapsedPresentation.className === 'error');
 		this._collapsedIcon.className = ThemeIcon.asClassName(collapsedPresentation.icon);
 		this._collapsedIcon.setAttribute('aria-hidden', 'true');
-		if (this._hostVisible && this._active && !expanded && status !== this._lastCollapsedStatus && (status === SessionStatus.NeedsInput || status === SessionStatus.Error)) {
-			announceStatus(collapsedPresentation.label);
+		if (!expanded) {
+			if (this._hostVisible && this._active && status !== this._lastCollapsedStatus && (status === SessionStatus.NeedsInput || status === SessionStatus.Error)) {
+				announceStatus(collapsedPresentation.label);
+			}
+			this._lastCollapsedStatus = status;
 		}
-		this._lastCollapsedStatus = status;
 
 		if (expanded) {
 			this._ensureSideModel(state);
