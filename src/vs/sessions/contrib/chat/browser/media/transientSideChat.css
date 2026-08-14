@@ -170,3 +170,8 @@
 	border-color: var(--vscode-contrastBorder);
 	box-shadow: none;
 }
+
+.hc-black .transient-side-chat-widget .interactive-list,
+.hc-light .transient-side-chat-widget .interactive-list {
+	border-top-color: var(--vscode-contrastBorder);
+}
