@@ -4,12 +4,25 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
+import * as dom from '../../../../../base/browser/dom.js';
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
+import { constObservable, observableValue } from '../../../../../base/common/observable.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { upcastPartial } from '../../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { SessionStatus } from '../../../../services/sessions/common/session.js';
-import { getTransientSideChatCollapsedPresentation, getTransientSideChatExpandedPresentation, getTransientSideChatResponseHeight, getTransientSideChatStatusAnnouncement, shouldCollapseTransientSideChatFromSourceInput } from '../../browser/transientSideChatWidget.js';
+import { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
+import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
+import { MockContextKeyService } from '../../../../../platform/keybinding/test/common/mockKeybindingService.js';
+import { ILogService, NullLogService } from '../../../../../platform/log/common/log.js';
+import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
+import { IChatService } from '../../../../../workbench/contrib/chat/common/chatService/chatService.js';
+import { IChat, ISession, SessionStatus } from '../../../../services/sessions/common/session.js';
+import { ITransientSideChatService, ITransientSideChatState } from '../../browser/transientSideChatService.js';
+import { getTransientSideChatCollapsedPresentation, getTransientSideChatExpandedPresentation, getTransientSideChatResponseHeight, getTransientSideChatStatusAnnouncement, shouldCollapseTransientSideChatFromSourceInput, TransientSideChatWidget } from '../../browser/transientSideChatWidget.js';
 
 suite('TransientSideChatWidget', () => {
-	ensureNoDisposablesAreLeakedInTestSuite();
+	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('distinguishes collapsed input-needed and error states without color alone', () => {
 		const needsInput = getTransientSideChatCollapsedPresentation(SessionStatus.NeedsInput);
@@ -100,6 +113,90 @@ suite('TransientSideChatWidget', () => {
 			request: false,
 			dictation: false,
 			editing: false,
+		});
+	});
+
+	test('expansion leaves the source composer mounted and exposes only answer-card actions', () => {
+		const instantiationService = disposables.add(new TestInstantiationService());
+		instantiationService.stub(IContextKeyService, disposables.add(new MockContextKeyService()));
+		instantiationService.stub(IChatService, upcastPartial<IChatService>({}));
+		instantiationService.stub(ILogService, new NullLogService());
+		instantiationService.stub(IHoverService, upcastPartial<IHoverService>({
+			setupManagedHover: () => ({
+				dispose: () => undefined,
+				show: () => undefined,
+				hide: () => undefined,
+				update: () => undefined,
+			}),
+		}));
+
+		const states = observableValue<readonly ITransientSideChatState[]>(disposables, []);
+		instantiationService.stub(ITransientSideChatService, upcastPartial<ITransientSideChatService>({
+			states,
+			registerHost: () => toDisposable(() => undefined),
+			removeBySideChat: () => undefined,
+		}));
+
+		const document = dom.getActiveDocument();
+		const composer = dom.append(document.body, dom.$('.source-composer'));
+		disposables.add(toDisposable(() => composer.remove()));
+		const persistentContent = dom.append(composer, dom.$('.source-persistent-content'));
+		const sourceEditor = dom.append(composer, dom.$('.source-editor'));
+		const sourceWidget = {
+			inputEditor: upcastPartial<ICodeEditor>({
+				getDomNode: () => sourceEditor,
+				hasTextFocus: () => false,
+			}),
+			inputPart: { hasActiveToolConfirmationCarousel: false },
+			focusInput: () => undefined,
+		};
+		const widget = disposables.add(instantiationService.createInstance(TransientSideChatWidget, persistentContent, sourceWidget));
+		Reflect.set(widget, '_ensureSideModel', () => undefined);
+
+		const sourceChat = upcastPartial<IChat>({ resource: URI.parse('test:///source') });
+		const sideChat = upcastPartial<IChat>({
+			resource: URI.parse('test:///side'),
+			status: constObservable(SessionStatus.Completed),
+		});
+		const session = upcastPartial<ISession>({ sessionId: 'session' });
+		widget.setSource(sourceChat, session);
+		const state: ITransientSideChatState = {
+			session,
+			sourceChat,
+			sideChat,
+			question: 'What changed?',
+			expanded: true,
+			promoting: false,
+			sendFailed: false,
+			replacedExisting: false,
+		};
+		states.set([state], undefined);
+
+		const card = persistentContent.querySelector<HTMLElement>('.transient-side-chat-card');
+		const actionLabels = [...persistentContent.querySelectorAll<HTMLElement>('.transient-side-chat-actions [aria-label]')]
+			.map(element => element.getAttribute('aria-label'));
+		const expandedCardHidden = card?.classList.contains('hidden');
+		states.set([{ ...state, expanded: false }], undefined);
+		const collapsedButton = persistentContent.querySelector<HTMLElement>('.transient-side-chat-collapsed');
+
+		assert.deepStrictEqual({
+			sourceEditorMounted: composer.contains(sourceEditor),
+			sourceEditorDisplay: sourceEditor.style.display,
+			expandedCardHidden,
+			question: card?.querySelector('.transient-side-chat-question')?.textContent,
+			actionLabels,
+			nestedComposerCount: persistentContent.querySelectorAll('.transient-side-chat-widget .interactive-input-part:not(.chat-input-hidden)').length,
+			collapsedExpanded: collapsedButton?.getAttribute('aria-expanded'),
+			collapsedControlsCard: collapsedButton?.getAttribute('aria-controls') === card?.id,
+		}, {
+			sourceEditorMounted: true,
+			sourceEditorDisplay: '',
+			expandedCardHidden: false,
+			question: 'What changed?',
+			actionLabels: ['Side question actions', 'Open Full Chat', 'Close Side Question'],
+			nestedComposerCount: 0,
+			collapsedExpanded: 'false',
+			collapsedControlsCard: true,
 		});
 	});
 });

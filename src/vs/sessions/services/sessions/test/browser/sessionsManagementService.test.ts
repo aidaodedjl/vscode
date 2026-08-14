@@ -1126,6 +1126,52 @@ suite('SessionsManagementService', () => {
 		});
 	});
 
+	test('a preserved send completion does not clear another send follow', async () => {
+		const mainChat: IChat = { ...stubChat, resource: URI.parse('test:///chat/main'), title: constObservable('main') };
+		const sideChat: IChat = { ...stubChat, resource: URI.parse('test:///chat/side'), title: constObservable('side') };
+		const materializedChat: IChat = { ...stubChat, resource: URI.parse('test:///chat/materialized'), title: constObservable('materialized') };
+		const chats = observableValue<readonly IChat[]>('test.chats', [mainChat, sideChat]);
+		const session = stubSession({
+			sessionId: 's1',
+			providerId: 'test',
+			chats,
+			mainChat: constObservable(mainChat),
+			capabilities: constObservable({ supportsMultipleChats: true }),
+		});
+		const normalStarted = new DeferredPromise<void>();
+		const normalCompleted = new DeferredPromise<void>();
+		const preservedStarted = new DeferredPromise<void>();
+		const preservedCompleted = new DeferredPromise<void>();
+		const provider = new class extends TestSessionsProvider {
+			override async sendRequest(_sessionId: string, chatResource: URI): Promise<ISession> {
+				if (chatResource.toString() === mainChat.resource.toString()) {
+					normalStarted.complete();
+					await normalCompleted.p;
+				} else {
+					preservedStarted.complete();
+					await preservedCompleted.p;
+				}
+				return session;
+			}
+		}(session);
+		const { service, view } = createSessionsManagementService(session, disposables, provider);
+		await view.openSession(session.resource);
+
+		const normalSend = service.sendRequest(session, mainChat, { query: 'foreground' });
+		await normalStarted.p;
+		const preservedSend = service.sendRequest(session, sideChat, { query: 'transient', preserveActiveChat: true });
+		await preservedStarted.p;
+		preservedCompleted.complete();
+		await preservedSend;
+
+		chats.set([mainChat, sideChat, materializedChat], undefined);
+		const activeAfterPreservedCompletion = view.activeSession.get()?.activeChat.get().resource.toString();
+		normalCompleted.complete();
+		await normalSend;
+
+		assert.strictEqual(activeAfterPreservedCompletion, materializedChat.resource.toString());
+	});
+
 	test('createAndSendNewChatRequest sends without changing the active view', async () => {
 		const chat: IChat = { ...stubChat, resource: URI.parse('test:///chat') };
 		const session = stubSession({

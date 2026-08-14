@@ -16,6 +16,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { localize } from '../../../../nls.js';
 import { status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
+import { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
 import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -37,6 +38,14 @@ import { ITransientSideChatService, ITransientSideChatState } from './transientS
 interface ITransientSideChatSource {
 	readonly chat: IChat;
 	readonly session: ISession;
+}
+
+interface ITransientSideChatSourceWidget {
+	readonly inputEditor: ICodeEditor;
+	readonly inputPart: {
+		readonly hasActiveToolConfirmationCarousel: boolean;
+	};
+	focusInput(): void;
 }
 
 let transientSideChatIdPool = 0;
@@ -172,7 +181,7 @@ export class TransientSideChatWidget extends Disposable {
 
 	constructor(
 		parent: HTMLElement,
-		private readonly _mainWidget: ChatWidget,
+		private readonly _mainWidget: ITransientSideChatSourceWidget,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IChatService private readonly _chatService: IChatService,
