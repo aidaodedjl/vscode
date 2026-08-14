@@ -1,0 +1,161 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { Disposable, IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { IObservable, observableValue } from '../../../../base/common/observable.js';
+import { URI } from '../../../../base/common/uri.js';
+import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
+import { IChat, ISession } from '../../../services/sessions/common/session.js';
+import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+
+export interface ITransientSideChatState {
+	readonly session: ISession;
+	readonly sourceChat: IChat;
+	readonly sideChat: IChat;
+	readonly question: string;
+	readonly expanded: boolean;
+	readonly promoting: boolean;
+}
+
+export interface ITransientSideChatHost {
+	revealSource(): boolean;
+}
+
+export const ITransientSideChatService = createDecorator<ITransientSideChatService>('transientSideChatService');
+
+export interface ITransientSideChatService {
+	readonly _serviceBrand: undefined;
+	readonly states: IObservable<readonly ITransientSideChatState[]>;
+	registerHost(sourceChat: URI, host: ITransientSideChatHost): IDisposable;
+	show(session: ISession, sourceChat: IChat, sideChat: IChat, question: string): Promise<boolean>;
+	expand(sourceChat: URI): void;
+	collapse(sourceChat: URI): void;
+	promote(sourceChat: URI): Promise<void>;
+	removeBySideChat(sideChat: URI): void;
+	revealSource(sideChat: URI): boolean;
+}
+
+export class TransientSideChatService extends Disposable implements ITransientSideChatService {
+	declare readonly _serviceBrand: undefined;
+
+	private readonly _states = observableValue<readonly ITransientSideChatState[]>(this, []);
+	readonly states: IObservable<readonly ITransientSideChatState[]> = this._states;
+
+	private readonly _hosts = new Map<string, ITransientSideChatHost>();
+
+	constructor(
+		@ISessionsService private readonly sessionsService: ISessionsService,
+		@ISessionsManagementService sessionsManagementService: ISessionsManagementService,
+	) {
+		super();
+		this._register(sessionsManagementService.onDidDeleteSession(session => {
+			const next = this._states.get().filter(state => state.session.sessionId !== session.sessionId);
+			if (next.length !== this._states.get().length) {
+				this._states.set(next, undefined);
+			}
+		}));
+	}
+
+	registerHost(sourceChat: URI, host: ITransientSideChatHost): IDisposable {
+		const key = sourceChat.toString();
+		this._hosts.set(key, host);
+		return toDisposable(() => {
+			if (this._hosts.get(key) === host) {
+				this._hosts.delete(key);
+			}
+		});
+	}
+
+	async show(session: ISession, sourceChat: IChat, sideChat: IChat, question: string): Promise<boolean> {
+		const key = sourceChat.resource.toString();
+		const host = this._hosts.get(key);
+		if (!host) {
+			return false;
+		}
+
+		await this.sessionsService.closeChat(session, sideChat, { skipHistory: true });
+		this._setState({
+			session,
+			sourceChat,
+			sideChat,
+			question,
+			expanded: true,
+			promoting: false,
+		});
+		return true;
+	}
+
+	expand(sourceChat: URI): void {
+		const state = this._getState(sourceChat);
+		if (!state || state.expanded || state.promoting) {
+			return;
+		}
+		this._setState({ ...state, expanded: true });
+	}
+
+	collapse(sourceChat: URI): void {
+		const state = this._getState(sourceChat);
+		if (!state || !state.expanded || state.promoting) {
+			return;
+		}
+		this._setState({ ...state, expanded: false });
+	}
+
+	async promote(sourceChat: URI): Promise<void> {
+		const state = this._getState(sourceChat);
+		if (!state || state.promoting) {
+			return;
+		}
+
+		this._setState({ ...state, promoting: true });
+		try {
+			await this.sessionsService.openChat(state.session, state.sideChat.resource);
+			this._remove(sourceChat);
+		} catch (error) {
+			this._setState({ ...state, promoting: false });
+			throw error;
+		}
+	}
+
+	removeBySideChat(sideChat: URI): void {
+		const state = this._states.get().find(candidate => candidate.sideChat.resource.toString() === sideChat.toString());
+		if (state) {
+			this._remove(state.sourceChat.resource);
+		}
+	}
+
+	revealSource(sideChat: URI): boolean {
+		const state = this._states.get().find(candidate => candidate.sideChat.resource.toString() === sideChat.toString());
+		return !!state && (this._hosts.get(state.sourceChat.resource.toString())?.revealSource() ?? false);
+	}
+
+	private _getState(sourceChat: URI): ITransientSideChatState | undefined {
+		const key = sourceChat.toString();
+		return this._states.get().find(state => state.sourceChat.resource.toString() === key);
+	}
+
+	private _setState(nextState: ITransientSideChatState): void {
+		const key = nextState.sourceChat.resource.toString();
+		const states = this._states.get();
+		const index = states.findIndex(state => state.sourceChat.resource.toString() === key);
+		const next = [...states];
+		if (index === -1) {
+			next.push(nextState);
+		} else {
+			next[index] = nextState;
+		}
+		this._states.set(next, undefined);
+	}
+
+	private _remove(sourceChat: URI): void {
+		const key = sourceChat.toString();
+		const states = this._states.get();
+		const next = states.filter(state => state.sourceChat.resource.toString() !== key);
+		if (next.length !== states.length) {
+			this._states.set(next, undefined);
+		}
+	}
+}

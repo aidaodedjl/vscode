@@ -1028,6 +1028,31 @@ suite('SessionsManagementService', () => {
 		completeSendRequest?.();
 	});
 
+	test('sendRequest with preserveActiveChat remains awaited and does not fire onWillSendRequest', async () => {
+		const chat: IChat = { ...stubChat, resource: URI.parse('test:///chat') };
+		const session = stubSession({
+			sessionId: 's1',
+			providerId: 'test',
+			chats: constObservable([chat]),
+			mainChat: constObservable(chat),
+		});
+		let providerCompleted = false;
+		const provider = new class extends TestSessionsProvider {
+			override async sendRequest(): Promise<ISession> {
+				await Promise.resolve();
+				providerCompleted = true;
+				return session;
+			}
+		}(session);
+		const { service } = createSessionsManagementService(session, disposables, provider);
+		let willSendCount = 0;
+		disposables.add(service.onWillSendRequest(() => willSendCount++));
+
+		await service.sendRequest(session, chat, { query: 'hi', preserveActiveChat: true });
+
+		assert.deepStrictEqual({ providerCompleted, willSendCount }, { providerCompleted: true, willSendCount: 0 });
+	});
+
 	test('mirrored follow-up requests preserve submitted attachments', () => {
 		const chat: IChat = { ...stubChat, resource: URI.parse('test:///chat') };
 		const session = stubSession({

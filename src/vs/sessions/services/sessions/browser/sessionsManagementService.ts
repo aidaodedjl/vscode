@@ -994,11 +994,12 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			return;
 		}
 
-		// Notify listeners that a send is starting. Listeners (e.g., telemetry)
-		// can use this to prewarm caches whose result is consumed when
-		// `onDidSendRequest` fires below. The view service observes the will/did
-		// send pair to keep the sent chat active in the visible slot.
-		this._onWillSendRequest.fire(session);
+		// The view service observes the will/did pair to keep a foreground send's
+		// chat active. Transient side chats remain awaited but deliberately skip
+		// that navigation until the user promotes them.
+		if (!options.preserveActiveChat) {
+			this._onWillSendRequest.fire(session);
+		}
 
 		const sendOptions = this._augmentOptionsForTroubleshoot(session, options);
 		const chatResourceKey = chat.resource.toString();

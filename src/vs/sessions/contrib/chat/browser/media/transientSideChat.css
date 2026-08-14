@@ -1,0 +1,156 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.transient-side-chat-host {
+	display: flex;
+	flex-direction: column;
+	gap: var(--vscode-spacing-size80);
+	width: 100%;
+	margin-bottom: var(--vscode-spacing-size80);
+}
+
+.transient-side-chat-host.hidden,
+.transient-side-chat-card.hidden,
+.transient-side-chat-collapsed.hidden {
+	display: none;
+}
+
+.transient-side-chat-card {
+	display: flex;
+	flex-direction: column;
+	align-self: center;
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	overflow: hidden;
+	border: var(--vscode-strokeThickness) solid color-mix(in srgb, var(--vscode-foreground) 14%, transparent);
+	border-radius: var(--vscode-cornerRadius-large);
+	background: var(--vscode-agentsPanel-background, var(--vscode-editor-background));
+	box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+}
+
+.transient-side-chat-card:focus-visible {
+	outline: var(--vscode-strokeThickness) solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+
+.transient-side-chat-header {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--vscode-spacing-size80);
+	padding: var(--vscode-spacing-size80) var(--vscode-spacing-size80) var(--vscode-spacing-size80) var(--vscode-spacing-size100);
+}
+
+.transient-side-chat-heading {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+	gap: var(--vscode-spacing-size20);
+}
+
+.transient-side-chat-title {
+	font-size: var(--vscode-agents-fontSize-label1, 12px);
+	font-weight: var(--vscode-agents-fontWeight-semiBold, 600);
+}
+
+.transient-side-chat-question {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--vscode-foreground);
+	font-size: var(--vscode-agents-fontSize-body1, 13px);
+	font-weight: var(--vscode-agents-fontWeight-regular, 400);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.transient-side-chat-actions {
+	flex: 0 0 auto;
+}
+
+.transient-side-chat-actions .actions-container {
+	gap: var(--vscode-spacing-size20);
+}
+
+.transient-side-chat-actions .action-item .action-label {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	width: 26px;
+	height: 26px;
+	border-radius: var(--vscode-cornerRadius-small);
+	color: var(--vscode-descriptionForeground);
+}
+
+.transient-side-chat-widget {
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.transient-side-chat-widget > .interactive-session {
+	height: 100%;
+}
+
+.transient-side-chat-widget .interactive-list {
+	border-top: var(--vscode-strokeThickness) solid color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
+}
+
+.transient-side-chat-widget .chat-used-context {
+	display: none;
+}
+
+.transient-side-chat-collapsed {
+	display: inline-flex;
+	align-items: center;
+	align-self: flex-start;
+	gap: var(--vscode-spacing-size40);
+	height: 24px;
+	padding: 0 var(--vscode-spacing-size80);
+	border: var(--vscode-strokeThickness) solid transparent;
+	border-radius: var(--vscode-cornerRadius-circle);
+	color: var(--vscode-descriptionForeground);
+	background: transparent;
+	font-size: var(--vscode-agents-fontSize-label2, 11px);
+	cursor: pointer;
+}
+
+.transient-side-chat-collapsed:hover {
+	color: var(--vscode-foreground);
+	background: var(--vscode-toolbar-hoverBackground);
+}
+
+.transient-side-chat-collapsed:focus-visible {
+	outline: var(--vscode-strokeThickness) solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+
+.transient-side-chat-collapsed > .codicon {
+	font-size: var(--vscode-codiconFontSize-compact, 12px);
+}
+
+.transient-side-chat-collapsed.needs-input {
+	border-color: currentColor;
+	color: var(--vscode-list-warningForeground);
+}
+
+.transient-side-chat-collapsed.error {
+	border-color: currentColor;
+	color: var(--vscode-list-errorForeground);
+}
+
+.hc-black .transient-side-chat-collapsed,
+.hc-light .transient-side-chat-collapsed {
+	border: var(--vscode-strokeThickness) solid var(--vscode-contrastBorder);
+}
+
+.hc-black .transient-side-chat-card,
+.hc-light .transient-side-chat-card {
+	border-color: var(--vscode-contrastBorder);
+	box-shadow: none;
+}

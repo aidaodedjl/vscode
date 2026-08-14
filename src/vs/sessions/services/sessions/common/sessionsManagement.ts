@@ -34,6 +34,12 @@ export interface ISendRequestOptions extends ISessionsProviderSendRequestOptions
 	 * existing session).
 	 */
 	readonly background?: boolean;
+	/**
+	 * Send the request without changing which chat is active in the visible
+	 * session slot. Unlike {@link background}, the send remains awaited and
+	 * failures propagate to the caller.
+	 */
+	readonly preserveActiveChat?: boolean;
 }
 
 export interface IDeferredNewSessionRequestOptions {

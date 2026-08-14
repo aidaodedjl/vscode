@@ -71,9 +71,8 @@ export interface IOpenNewSessionResult {
 /** Options for {@link ISessionsService.closeChat}. */
 export interface ICloseChatOptions {
 	/**
-	 * Do not remember the chat as the most recently closed item. Used by batch
-	 * closes (e.g. "Close All Chats"), where remembering just the final chat of
-	 * the batch would make one arbitrary member of it reopenable.
+	 * Do not change which item is reopened by the reopen-last-closed action,
+	 * such as for batch or transient closes.
 	 */
 	readonly skipHistory?: boolean;
 }
@@ -180,7 +179,7 @@ export interface ISessionsService {
 	 * Close a chat from the session view. The chat is hidden from the tab strip
 	 * and can be reopened from the session header's chats dropdown.
 	 */
-	closeChat(session: IActiveSession, chat: IChat, options?: ICloseChatOptions): Promise<void>;
+	closeChat(session: ISession, chat: IChat, options?: ICloseChatOptions): Promise<void>;
 
 	/**
 	 * Reopen the single most recently closed chat or session and focus it.
@@ -698,10 +697,10 @@ export class SessionsService extends Disposable implements ISessionsService {
 		this.logService.trace(`[SessionsView] openChat done total=${Date.now() - t0}ms uri=${chatUri.toString()}`);
 	}
 
-	async closeChat(session: IActiveSession, chat: IChat, options?: ICloseChatOptions): Promise<void> {
+	async closeChat(session: ISession, chat: IChat, options?: ICloseChatOptions): Promise<void> {
 		// Closing hides the chat from the tab strip; it stays reopenable from the
 		// session header's chats dropdown.
-		this._visibility.closeChat(session, chat);
+		this._visibility.closeChat(session, chat, options?.skipHistory);
 		this._setChatClosedState(session, chat, true);
 		if (!options?.skipHistory) {
 			this._closedItems.recordClosedChat(session, chat.resource);

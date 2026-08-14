@@ -350,6 +350,8 @@ export interface IChatWidgetViewOptions {
 
 	/** Enables the transcript Find widget (`Ctrl/Cmd+F`) for this chat widget. Off by default. */
 	enableFind?: boolean;
+	/** Whether this widget may render the chat pet. Defaults to true. */
+	enableChatPet?: boolean;
 }
 
 export interface IChatViewViewContext {
