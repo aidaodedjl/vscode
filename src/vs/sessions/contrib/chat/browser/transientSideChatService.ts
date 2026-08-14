@@ -19,6 +19,7 @@ export interface ITransientSideChatState {
 	readonly expanded: boolean;
 	readonly promoting: boolean;
 	readonly sendFailed: boolean;
+	readonly replacedExisting: boolean;
 }
 
 export const ITransientSideChatService = createDecorator<ITransientSideChatService>('transientSideChatService');
@@ -83,6 +84,7 @@ export class TransientSideChatService extends Disposable implements ITransientSi
 			return false;
 		}
 
+		const replacedExisting = this._getState(sourceChat.resource) !== undefined;
 		await this.sessionsService.closeChat(session, sideChat, { skipHistory: true });
 		this._setState({
 			session,
@@ -92,6 +94,7 @@ export class TransientSideChatService extends Disposable implements ITransientSi
 			expanded: true,
 			promoting: false,
 			sendFailed: false,
+			replacedExisting,
 		});
 		return true;
 	}

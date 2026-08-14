@@ -56,9 +56,11 @@ export function getTransientSideChatResponseHeight(viewHeight: number, contentHe
 	return Math.min(maxHeight, desiredHeight);
 }
 
-export function getTransientSideChatStatusAnnouncement(previousStatus: SessionStatus | undefined, status: SessionStatus, isNewSideChat: boolean): string | undefined {
+export function getTransientSideChatStatusAnnouncement(previousStatus: SessionStatus | undefined, status: SessionStatus, isNewSideChat: boolean, replacedExisting: boolean): string | undefined {
 	if (isNewSideChat) {
-		return localize('transientSideChat.askedStatus', "Side question asked");
+		return replacedExisting
+			? localize('transientSideChat.replacedStatus', "New side question shown. The previous answer remains in Closed chats.")
+			: localize('transientSideChat.askedStatus', "Side question asked");
 	}
 	if (!isActiveSessionStatus(previousStatus ?? SessionStatus.Completed)) {
 		return undefined;
@@ -363,7 +365,7 @@ export class TransientSideChatWidget extends Disposable {
 		const status = state.sendFailed ? SessionStatus.Error : state.sideChat.status.read(reader);
 		const sideChatResource = state.sideChat.resource.toString();
 		const isNewSideChat = sideChatResource !== this._announcedSideChatResource;
-		const statusAnnouncement = getTransientSideChatStatusAnnouncement(this._lastSideChatStatus, status, isNewSideChat);
+		const statusAnnouncement = getTransientSideChatStatusAnnouncement(this._lastSideChatStatus, status, isNewSideChat, state.replacedExisting);
 		if (this._hostVisible && this._active && statusAnnouncement && (expanded || status === SessionStatus.Completed)) {
 			announceStatus(statusAnnouncement);
 		}

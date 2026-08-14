@@ -58,13 +58,15 @@ suite('TransientSideChatWidget', () => {
 
 	test('announces side-question creation and terminal answer transitions once', () => {
 		assert.deepStrictEqual({
-			created: getTransientSideChatStatusAnnouncement(undefined, SessionStatus.InProgress, true),
-			completed: getTransientSideChatStatusAnnouncement(SessionStatus.InProgress, SessionStatus.Completed, false),
-			failed: getTransientSideChatStatusAnnouncement(SessionStatus.InProgress, SessionStatus.Error, false),
-			stillWorking: getTransientSideChatStatusAnnouncement(SessionStatus.InProgress, SessionStatus.InProgress, false),
-			alreadyComplete: getTransientSideChatStatusAnnouncement(SessionStatus.Completed, SessionStatus.Completed, false),
+			created: getTransientSideChatStatusAnnouncement(undefined, SessionStatus.InProgress, true, false),
+			replaced: getTransientSideChatStatusAnnouncement(undefined, SessionStatus.InProgress, true, true),
+			completed: getTransientSideChatStatusAnnouncement(SessionStatus.InProgress, SessionStatus.Completed, false, false),
+			failed: getTransientSideChatStatusAnnouncement(SessionStatus.InProgress, SessionStatus.Error, false, false),
+			stillWorking: getTransientSideChatStatusAnnouncement(SessionStatus.InProgress, SessionStatus.InProgress, false, false),
+			alreadyComplete: getTransientSideChatStatusAnnouncement(SessionStatus.Completed, SessionStatus.Completed, false, false),
 		}, {
 			created: 'Side question asked',
+			replaced: 'New side question shown. The previous answer remains in Closed chats.',
 			completed: 'Side question answered',
 			failed: 'Side question failed',
 			stillWorking: undefined,

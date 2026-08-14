@@ -182,4 +182,23 @@ suite('TransientSideChatService', () => {
 		}]);
 	});
 
+	test('records when a new side question replaces the source slot', async () => {
+		const { service } = setup();
+		const replacement = upcastPartial<IChat>({ resource: URI.parse('test:///chat/replacement') });
+		disposables.add(service.registerHost(sourceChat.resource));
+
+		await service.show(session, sourceChat, sideChat, 'first');
+		const first = service.states.get()[0];
+		await service.show(session, sourceChat, replacement, 'second');
+		const second = service.states.get()[0];
+
+		assert.deepStrictEqual({
+			first: first?.replacedExisting,
+			second: second?.replacedExisting,
+		}, {
+			first: false,
+			second: true,
+		});
+	});
+
 });
