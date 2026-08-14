@@ -18,11 +18,13 @@ import { MockContextKeyService } from '../../../../../platform/keybinding/test/c
 import { ILogService, NullLogService } from '../../../../../platform/log/common/log.js';
 import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
 import { IChatService } from '../../../../../workbench/contrib/chat/common/chatService/chatService.js';
+import { ChatWidget } from '../../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import { ChatCollapsibleContentPart } from '../../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatCollapsibleContentPart.js';
 import { ChatToolInvocation } from '../../../../../workbench/contrib/chat/common/model/chatProgressTypes/chatToolInvocation.js';
 import { ToolDataSource } from '../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { IChat, ISession, SessionStatus } from '../../../../services/sessions/common/session.js';
 import { ITransientSideChatService, ITransientSideChatState } from '../../browser/transientSideChatService.js';
-import { getTransientSideChatModelActivity, getTransientSideChatPresentation, getTransientSideChatResponseHeight, getTransientSideChatStatusAnnouncement, shouldDismissTransientSideChatFromSourceInput, shouldShowTransientSideChatProgress, TransientSideChatWidget } from '../../browser/transientSideChatWidget.js';
+import { getTransientSideChatModelActivity, getTransientSideChatPinnedResponseHeight, getTransientSideChatPresentation, getTransientSideChatResponseHeight, getTransientSideChatStatusAnnouncement, shouldDismissTransientSideChatFromSourceInput, shouldShowTransientSideChatProgress, TransientSideChatWidget } from '../../browser/transientSideChatWidget.js';
 
 suite('TransientSideChatWidget', () => {
 	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
@@ -52,12 +54,16 @@ suite('TransientSideChatWidget', () => {
 			shortView: getTransientSideChatResponseHeight(400, 500, 50),
 			empty: getTransientSideChatResponseHeight(1000, 0, 50),
 			measuredMinimum: getTransientSideChatResponseHeight(1000, 10, 50, 38),
+			renderedHeightWins: getTransientSideChatPinnedResponseHeight(173, 77),
+			viewportFallback: getTransientSideChatPinnedResponseHeight(0, 77),
 		}, {
 			shortAnswer: 28,
 			tallAnswer: 550,
 			shortView: 190,
 			empty: 1,
 			measuredMinimum: 38,
+			renderedHeightWins: 173,
+			viewportFallback: 77,
 		});
 	});
 
@@ -216,6 +222,22 @@ suite('TransientSideChatWidget', () => {
 		const progressActivity = progress?.querySelector('.transient-side-chat-progress-label')?.textContent;
 		states.set([{ ...state, sendFailed: true }], undefined);
 		const progressHiddenAfterFailure = persistentContent.querySelector('.transient-side-chat-progress')?.classList.contains('hidden');
+		const pinnedLayoutCalls: [number, number][] = [];
+		const nestedWidget = upcastPartial<ChatWidget>({
+			viewportHeight: 77,
+			scrollHeight: 77,
+			layout: (height, width) => pinnedLayoutCalls.push([height, width]),
+			setModel: () => undefined,
+			setVisible: () => undefined,
+			dispose: () => undefined,
+		});
+		const nestedWidgetSlot = Reflect.get(widget, '_widget') as { value: ChatWidget | undefined };
+		nestedWidgetSlot.value = nestedWidget;
+		Reflect.set(widget, '_lastLayout', { height: 1000, width: 900 });
+		const widgetHost = persistentContent.querySelector<HTMLElement>('.transient-side-chat-widget');
+		assert.ok(widgetHost);
+		Object.defineProperty(widgetHost, 'clientHeight', { configurable: true, value: 173 });
+		widgetHost.dispatchEvent(new CustomEvent(ChatCollapsibleContentPart.userToggleEvent, { bubbles: true }));
 		persistentContent.querySelector<HTMLElement>('.transient-side-chat-actions [aria-label="Close Side Question"]')?.click();
 
 		assert.deepStrictEqual({
@@ -228,6 +250,7 @@ suite('TransientSideChatWidget', () => {
 			progressUsesShimmer,
 			progressActivity,
 			progressHiddenAfterFailure,
+			pinnedLayoutCalls,
 			removedSideChat: removedSideChats.at(-1),
 			hostHiddenAfterClose: persistentContent.querySelector('.transient-side-chat-host')?.classList.contains('hidden'),
 			residualPillCount: persistentContent.querySelectorAll('.transient-side-chat-collapsed').length,
@@ -242,6 +265,7 @@ suite('TransientSideChatWidget', () => {
 			progressUsesShimmer: true,
 			progressActivity: 'Starting MCP servers',
 			progressHiddenAfterFailure: true,
+			pinnedLayoutCalls: [[173, 800]],
 			removedSideChat: sideChat.resource.toString(),
 			hostHiddenAfterClose: true,
 			residualPillCount: 0,

@@ -66,6 +66,11 @@ export function getTransientSideChatResponseHeight(viewHeight: number, contentHe
 	return Math.min(maxHeight, desiredHeight);
 }
 
+export function getTransientSideChatPinnedResponseHeight(renderedHeight: number, viewportHeight: number): number | undefined {
+	const height = renderedHeight || viewportHeight;
+	return height > 0 ? height : undefined;
+}
+
 export function shouldShowTransientSideChatProgress(status: SessionStatus, waitingForFinalResponse: boolean): boolean {
 	return waitingForFinalResponse && status !== SessionStatus.NeedsInput && status !== SessionStatus.Error;
 }
@@ -277,8 +282,11 @@ export class TransientSideChatWidget extends Disposable {
 		this._widgetHost = dom.append(this._card, dom.$('.transient-side-chat-widget'));
 		this._register(dom.addDisposableListener(this._widgetHost, ChatCollapsibleContentPart.userToggleEvent, () => {
 			const widget = this._widget.value;
-			if (widget && !this._progressVisible && this._fixedResponseHeight === undefined && widget.viewportHeight > 0) {
-				this._fixedResponseHeight = widget.viewportHeight;
+			if (widget && !this._progressVisible && this._fixedResponseHeight === undefined) {
+				this._fixedResponseHeight = getTransientSideChatPinnedResponseHeight(this._widgetHost.clientHeight, widget.viewportHeight);
+				if (this._fixedResponseHeight !== undefined && this._lastLayout) {
+					this.layout(this._lastLayout.height, this._lastLayout.width);
+				}
 			}
 		}));
 		this._scopedContextKeyService = this._register(contextKeyService.createScoped(this.element));
