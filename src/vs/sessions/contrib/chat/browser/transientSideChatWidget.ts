@@ -124,8 +124,10 @@ export class TransientSideChatWidget extends Disposable {
 		const heading = dom.append(header, dom.$('.transient-side-chat-heading'));
 		const title = dom.append(heading, dom.$('.transient-side-chat-title', undefined, localize('transientSideChat.title', "Side question")));
 		this._questionText = dom.append(heading, dom.$('.transient-side-chat-question'));
-		this._card.setAttribute('aria-labelledby', title.id = `${cardId}-title`);
-		this._card.setAttribute('aria-describedby', this._questionText.id = `${cardId}-question`);
+		title.id = `${cardId}-title`;
+		this._questionText.id = `${cardId}-question`;
+		this._card.setAttribute('aria-labelledby', title.id);
+		this._card.setAttribute('aria-describedby', this._questionText.id);
 		this._register(hoverService.setupManagedHover(
 			getDefaultHoverDelegate('element'),
 			this._questionText,
