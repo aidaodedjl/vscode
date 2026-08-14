@@ -16,6 +16,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { localize } from '../../../../nls.js';
 import { status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
+import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
 import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
@@ -26,6 +27,7 @@ import { EDITOR_DRAG_AND_DROP_BACKGROUND } from '../../../../workbench/common/th
 import { setModelPreservingInputTypedWhileLoading } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { ChatWidget } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { IChatModelReference, IChatService } from '../../../../workbench/contrib/chat/common/chatService/chatService.js';
+import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { ChatAgentLocation } from '../../../../workbench/contrib/chat/common/constants.js';
 import { isResponseVM } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { IChat, ISession, isActiveSessionStatus, SessionStatus } from '../../../services/sessions/common/session.js';
@@ -69,6 +71,26 @@ export function getTransientSideChatStatusAnnouncement(previousStatus: SessionSt
 		default:
 			return undefined;
 	}
+}
+
+export function shouldCollapseTransientSideChatFromSourceInput(state: {
+	readonly expanded: boolean;
+	readonly defaultPrevented: boolean;
+	readonly confirmationVisible: boolean;
+	readonly suggestVisible: boolean;
+	readonly hoverVisible: boolean;
+	readonly requestInProgress: boolean;
+	readonly speechToTextRecording: boolean;
+	readonly currentlyEditing: boolean;
+}): boolean {
+	return state.expanded
+		&& !state.defaultPrevented
+		&& !state.confirmationVisible
+		&& !state.suggestVisible
+		&& !state.hoverVisible
+		&& !state.requestInProgress
+		&& !state.speechToTextRecording
+		&& !state.currentlyEditing;
 }
 
 export function getTransientSideChatCollapsedPresentation(status: SessionStatus): {
@@ -126,6 +148,7 @@ export class TransientSideChatWidget extends Disposable {
 	private readonly _statusText: HTMLElement;
 	private readonly _widgetHost: HTMLElement;
 	private readonly _widget = this._register(new MutableDisposable<ChatWidget>());
+	private readonly _sourceContextKeyService: IContextKeyService;
 	private readonly _scopedContextKeyService: IContextKeyService;
 	private readonly _scopedInstantiationService: IInstantiationService;
 	private readonly _promoteAction: Action;
@@ -156,6 +179,7 @@ export class TransientSideChatWidget extends Disposable {
 		@IHoverService hoverService: IHoverService,
 	) {
 		super();
+		this._sourceContextKeyService = contextKeyService;
 
 		this.element = dom.append(parent, dom.$('.transient-side-chat-host.hidden'));
 		this._collapsedButton = dom.append(this.element, dom.$('button.transient-side-chat-collapsed.hidden', {
@@ -242,6 +266,31 @@ export class TransientSideChatWidget extends Disposable {
 			event.stopPropagation();
 			this._collapse();
 		}));
+		const sourceInputEditor = this._mainWidget.inputEditor.getDomNode();
+		if (sourceInputEditor) {
+			this._register(dom.addDisposableListener(sourceInputEditor, dom.EventType.KEY_DOWN, (event: KeyboardEvent) => {
+				if (event.key !== 'Escape' || !this._mainWidget.inputEditor.hasTextFocus()) {
+					return;
+				}
+				const focusedContext = this._sourceContextKeyService.getContext(dom.getActiveElement());
+				if (!shouldCollapseTransientSideChatFromSourceInput({
+					expanded: this._isExpanded.get(),
+					defaultPrevented: event.defaultPrevented,
+					confirmationVisible: this._mainWidget.inputPart.hasActiveToolConfirmationCarousel,
+					suggestVisible: focusedContext.getValue<boolean>('suggestWidgetVisible') ?? false,
+					hoverVisible: focusedContext.getValue<boolean>(EditorContextKeys.hoverVisible.key) ?? false,
+					requestInProgress: focusedContext.getValue<boolean>(ChatContextKeys.requestInProgress.key) ?? false,
+					speechToTextRecording: focusedContext.getValue<boolean>(ChatContextKeys.speechToTextRecording.key) ?? false,
+					currentlyEditing: (focusedContext.getValue<boolean>(ChatContextKeys.currentlyEditing.key) ?? false)
+						|| (focusedContext.getValue<boolean>(ChatContextKeys.currentlyEditingInput.key) ?? false),
+				})) {
+					return;
+				}
+				event.preventDefault();
+				event.stopPropagation();
+				this._collapse();
+			}));
+		}
 	}
 
 	setSource(chat: IChat, session: ISession | undefined): void {

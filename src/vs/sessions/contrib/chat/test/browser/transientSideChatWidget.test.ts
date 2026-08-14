@@ -6,7 +6,7 @@
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { SessionStatus } from '../../../../services/sessions/common/session.js';
-import { getTransientSideChatCollapsedPresentation, getTransientSideChatExpandedPresentation, getTransientSideChatResponseHeight, getTransientSideChatStatusAnnouncement } from '../../browser/transientSideChatWidget.js';
+import { getTransientSideChatCollapsedPresentation, getTransientSideChatExpandedPresentation, getTransientSideChatResponseHeight, getTransientSideChatStatusAnnouncement, shouldCollapseTransientSideChatFromSourceInput } from '../../browser/transientSideChatWidget.js';
 
 suite('TransientSideChatWidget', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -69,6 +69,35 @@ suite('TransientSideChatWidget', () => {
 			failed: 'Side question failed',
 			stillWorking: undefined,
 			alreadyComplete: undefined,
+		});
+	});
+
+	test('defers source-input Escape to active input interactions', () => {
+		const idle = {
+			expanded: true,
+			defaultPrevented: false,
+			confirmationVisible: false,
+			suggestVisible: false,
+			hoverVisible: false,
+			requestInProgress: false,
+			speechToTextRecording: false,
+			currentlyEditing: false,
+		};
+
+		assert.deepStrictEqual({
+			idle: shouldCollapseTransientSideChatFromSourceInput(idle),
+			suggest: shouldCollapseTransientSideChatFromSourceInput({ ...idle, suggestVisible: true }),
+			confirmation: shouldCollapseTransientSideChatFromSourceInput({ ...idle, confirmationVisible: true }),
+			request: shouldCollapseTransientSideChatFromSourceInput({ ...idle, requestInProgress: true }),
+			dictation: shouldCollapseTransientSideChatFromSourceInput({ ...idle, speechToTextRecording: true }),
+			editing: shouldCollapseTransientSideChatFromSourceInput({ ...idle, currentlyEditing: true }),
+		}, {
+			idle: true,
+			suggest: false,
+			confirmation: false,
+			request: false,
+			dictation: false,
+			editing: false,
 		});
 	});
 });
