@@ -62,7 +62,6 @@ export function getTransientSideChatCollapsedPresentation(status: SessionStatus)
 
 export class TransientSideChatWidget extends Disposable {
 	readonly element: HTMLElement;
-	readonly isExpanded: IObservable<boolean>;
 
 	private readonly _card: HTMLElement;
 	private readonly _collapsedButton: HTMLButtonElement;
@@ -78,6 +77,7 @@ export class TransientSideChatWidget extends Disposable {
 
 	private readonly _source = observableValue<ITransientSideChatSource | undefined>(this, undefined);
 	private readonly _state: IObservable<ITransientSideChatState | undefined>;
+	private readonly _isExpanded: IObservable<boolean>;
 	private readonly _hostRegistration = this._register(new MutableDisposable());
 	private readonly _modelRef = this._register(new MutableDisposable<IChatModelReference>());
 	private readonly _loadCts = this._register(new MutableDisposable<CancellationTokenSource>());
@@ -161,7 +161,7 @@ export class TransientSideChatWidget extends Disposable {
 			return this._transientSideChatService.states.read(reader)
 				.find(state => state.sourceChat.resource.toString() === sourceResource);
 		});
-		this.isExpanded = derived(this, reader => {
+		this._isExpanded = derived(this, reader => {
 			const state = this._state.read(reader);
 			return !!state && (state.expanded || state.promoting);
 		});
@@ -172,7 +172,7 @@ export class TransientSideChatWidget extends Disposable {
 			if (event.key !== 'Escape') {
 				return;
 			}
-			if (event.defaultPrevented || !this.isExpanded.get() || this._state.get()?.promoting) {
+			if (event.defaultPrevented || !this._isExpanded.get() || this._state.get()?.promoting) {
 				return;
 			}
 			event.preventDefault();
