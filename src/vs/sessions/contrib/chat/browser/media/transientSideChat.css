@@ -69,8 +69,15 @@
 }
 
 .transient-side-chat-status {
-	color: var(--vscode-list-errorForeground);
 	font-size: var(--vscode-agents-fontSize-body2, 11px);
+}
+
+.transient-side-chat-status.needs-input {
+	color: var(--vscode-list-warningForeground);
+}
+
+.transient-side-chat-status.error {
+	color: var(--vscode-list-errorForeground);
 }
 
 .transient-side-chat-status.hidden {

@@ -66,6 +66,33 @@ export function getTransientSideChatCollapsedPresentation(status: SessionStatus)
 	}
 }
 
+export function getTransientSideChatExpandedPresentation(status: SessionStatus): {
+	readonly statusLabel: string;
+	readonly promoteLabel: string;
+	readonly className: 'needs-input' | 'error' | undefined;
+} {
+	switch (status) {
+		case SessionStatus.NeedsInput:
+			return {
+				statusLabel: localize('transientSideChat.expandedNeedsInput', "Input needed. Open the full chat to continue."),
+				promoteLabel: localize('transientSideChat.promoteToContinue', "Open Full Chat to Continue"),
+				className: 'needs-input',
+			};
+		case SessionStatus.Error:
+			return {
+				statusLabel: localize('transientSideChat.expandedFailed', "The side question failed. Open the full chat for details."),
+				promoteLabel: localize('transientSideChat.promoteForDetails', "Open Full Chat for Details"),
+				className: 'error',
+			};
+		default:
+			return {
+				statusLabel: '',
+				promoteLabel: localize('transientSideChat.promote', "Open Full Chat"),
+				className: undefined,
+			};
+	}
+}
+
 export class TransientSideChatWidget extends Disposable {
 	readonly element: HTMLElement;
 
@@ -254,10 +281,15 @@ export class TransientSideChatWidget extends Disposable {
 		this._closeAction.enabled = !state.promoting;
 
 		this._questionText.textContent = state.question;
-		this._statusText.textContent = state.sendFailed ? localize('transientSideChat.sendFailed', "The side question could not be answered.") : '';
-		this._statusText.classList.toggle('hidden', !state.sendFailed);
 
 		const status = state.sendFailed ? SessionStatus.Error : state.sideChat.status.read(reader);
+		const expandedPresentation = getTransientSideChatExpandedPresentation(status);
+		this._statusText.textContent = expandedPresentation.statusLabel;
+		this._statusText.classList.toggle('hidden', !expandedPresentation.statusLabel);
+		this._statusText.classList.toggle('needs-input', expandedPresentation.className === 'needs-input');
+		this._statusText.classList.toggle('error', expandedPresentation.className === 'error');
+		this._promoteAction.label = expandedPresentation.promoteLabel;
+
 		const collapsedPresentation = getTransientSideChatCollapsedPresentation(status);
 		this._collapsedLabel.textContent = collapsedPresentation.label;
 		this._collapsedButton.classList.toggle('needs-input', collapsedPresentation.className === 'needs-input');
