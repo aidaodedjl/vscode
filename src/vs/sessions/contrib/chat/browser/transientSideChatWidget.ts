@@ -74,6 +74,7 @@ export class TransientSideChatWidget extends Disposable {
 	private readonly _collapsedIcon: HTMLElement;
 	private readonly _collapsedLabel: HTMLElement;
 	private readonly _questionText: HTMLElement;
+	private readonly _statusText: HTMLElement;
 	private readonly _widgetHost: HTMLElement;
 	private readonly _widget = this._register(new MutableDisposable<ChatWidget>());
 	private readonly _scopedContextKeyService: IContextKeyService;
@@ -124,6 +125,7 @@ export class TransientSideChatWidget extends Disposable {
 		const heading = dom.append(header, dom.$('.transient-side-chat-heading'));
 		const title = dom.append(heading, dom.$('.transient-side-chat-title', undefined, localize('transientSideChat.title', "Side question")));
 		this._questionText = dom.append(heading, dom.$('.transient-side-chat-question'));
+		this._statusText = dom.append(heading, dom.$('.transient-side-chat-status.hidden'));
 		title.id = `${cardId}-title`;
 		this._questionText.id = `${cardId}-question`;
 		this._card.setAttribute('aria-labelledby', title.id);
@@ -252,8 +254,10 @@ export class TransientSideChatWidget extends Disposable {
 		this._closeAction.enabled = !state.promoting;
 
 		this._questionText.textContent = state.question;
+		this._statusText.textContent = state.sendFailed ? localize('transientSideChat.sendFailed', "The side question could not be answered.") : '';
+		this._statusText.classList.toggle('hidden', !state.sendFailed);
 
-		const status = state.sideChat.status.read(reader);
+		const status = state.sendFailed ? SessionStatus.Error : state.sideChat.status.read(reader);
 		const collapsedPresentation = getTransientSideChatCollapsedPresentation(status);
 		this._collapsedLabel.textContent = collapsedPresentation.label;
 		this._collapsedButton.classList.toggle('needs-input', collapsedPresentation.className === 'needs-input');

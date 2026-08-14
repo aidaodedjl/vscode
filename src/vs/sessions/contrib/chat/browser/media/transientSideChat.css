@@ -68,6 +68,15 @@
 	white-space: nowrap;
 }
 
+.transient-side-chat-status {
+	color: var(--vscode-list-errorForeground);
+	font-size: var(--vscode-agents-fontSize-body2, 11px);
+}
+
+.transient-side-chat-status.hidden {
+	display: none;
+}
+
 .transient-side-chat-actions {
 	flex: 0 0 auto;
 }

@@ -166,4 +166,20 @@ suite('TransientSideChatService', () => {
 		}]);
 	});
 
+	test('marks the matching transient side chat as failed', async () => {
+		const { service } = setup();
+		disposables.add(service.registerHost(sourceChat.resource));
+		await service.show(session, sourceChat, sideChat, 'question');
+
+		service.markSendFailed(sideChat.resource);
+
+		assert.deepStrictEqual(service.states.get().map(state => ({
+			sideChat: state.sideChat.resource.toString(),
+			sendFailed: state.sendFailed,
+		})), [{
+			sideChat: sideChat.resource.toString(),
+			sendFailed: true,
+		}]);
+	});
+
 });

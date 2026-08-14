@@ -39,6 +39,7 @@ suite('SideChatOrchestration', () => {
 				calls.push(`show:${source.resource.toString()}:${side.resource.toString()}:${question}`);
 				return presentedTransiently;
 			},
+			markSendFailed: sideChat => calls.push(`failed:${sideChat.toString()}`),
 		});
 		return { managementService, sessionsService, transientService, calls, sendOptions: () => sendOptions };
 	}
@@ -58,6 +59,24 @@ suite('SideChatOrchestration', () => {
 			],
 			preserveActiveChat: true,
 		});
+
+	});
+
+	test('marks a transient card failed when its awaited send rejects', async () => {
+		const { sessionsService, transientService, calls } = setup(true);
+		const managementService = upcastPartial<ISessionsManagementService>({
+			sendRequest: async () => { throw new Error('send failed'); },
+		});
+
+		await assert.rejects(
+			presentAndSendSideChat(managementService, sessionsService, transientService, session, sourceChat, sideChat, { query: 'question' }),
+			/send failed/,
+		);
+
+		assert.deepStrictEqual(calls, [
+			`show:${sourceChat.resource.toString()}:${sideChat.resource.toString()}:question`,
+			`failed:${sideChat.resource.toString()}`,
+		]);
 	});
 
 	test('falls back to the normal full chat when no source view can host it', async () => {

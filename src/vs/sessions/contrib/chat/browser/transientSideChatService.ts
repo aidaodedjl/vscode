@@ -18,6 +18,7 @@ export interface ITransientSideChatState {
 	readonly question: string;
 	readonly expanded: boolean;
 	readonly promoting: boolean;
+	readonly sendFailed: boolean;
 }
 
 export const ITransientSideChatService = createDecorator<ITransientSideChatService>('transientSideChatService');
@@ -30,6 +31,7 @@ export interface ITransientSideChatService {
 	expand(sourceChat: URI): void;
 	collapse(sourceChat: URI): void;
 	promote(sourceChat: URI): Promise<void>;
+	markSendFailed(sideChat: URI): void;
 	removeBySideChat(sideChat: URI): void;
 }
 
@@ -89,6 +91,7 @@ export class TransientSideChatService extends Disposable implements ITransientSi
 			question,
 			expanded: true,
 			promoting: false,
+			sendFailed: false,
 		});
 		return true;
 	}
@@ -129,6 +132,14 @@ export class TransientSideChatService extends Disposable implements ITransientSi
 				this._setState({ ...current, promoting: false });
 			}
 			throw error;
+		}
+	}
+
+	markSendFailed(sideChat: URI): void {
+		const key = sideChat.toString();
+		const state = this._states.get().find(candidate => candidate.sideChat.resource.toString() === key);
+		if (state && !state.sendFailed) {
+			this._setState({ ...state, sendFailed: true });
 		}
 	}
 
