@@ -55,6 +55,19 @@ export interface IRequestOptions {
 	 * Use "NO_FETCH_TELEMETRY" to opt out of request telemetry.
 	 */
 	callSite: string;
+	/**
+	 * A signal that a non-2xx response is an expected outcome of this request
+	 * (e.g. `404` meaning "nothing is configured") and therefore must not be
+	 * reported as a failure to the user.
+	 *
+	 * Implementations that issue requests from a browser window can use this to
+	 * run the request outside of the renderer: Chromium unconditionally logs
+	 * `Failed to load resource: the server responded with a status of 404` into
+	 * the Developer Tools console for every `fetch` that resolves with an error
+	 * status, which is confusing noise for an expected outcome. This may not be
+	 * supported in all implementations.
+	 */
+	expectNonSuccessStatus?: boolean;
 }
 
 export interface IRequestContext {

@@ -1088,6 +1088,10 @@ export class DefaultAccountProvider extends Disposable implements IDefaultAccoun
 					data: type === 'POST' ? JSON.stringify(body) : undefined,
 					disableCache: true,
 					timeout: requestTimeoutMs,
+					// Non-2xx responses are routine here (e.g. `404` when the account has no
+					// managed settings). Keep them out of the window's Developer Tools console
+					// by having the request run outside of the renderer.
+					expectNonSuccessStatus: true,
 					headers: {
 						'Authorization': `Bearer ${session.accessToken}`
 					},
