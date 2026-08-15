@@ -5,6 +5,7 @@
 
 import assert from 'assert';
 import * as dom from '../../../../../base/browser/dom.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { MarkdownString } from '../../../../../base/common/htmlContent.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { constObservable, observableValue } from '../../../../../base/common/observable.js';
@@ -17,6 +18,8 @@ import { IHoverService } from '../../../../../platform/hover/browser/hover.js';
 import { MockContextKeyService } from '../../../../../platform/keybinding/test/common/mockKeybindingService.js';
 import { ILogService, NullLogService } from '../../../../../platform/log/common/log.js';
 import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { TestNotificationService } from '../../../../../platform/notification/test/common/testNotificationService.js';
 import { IChatService } from '../../../../../workbench/contrib/chat/common/chatService/chatService.js';
 import { ChatWidget } from '../../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { ChatCollapsibleContentPart } from '../../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatCollapsibleContentPart.js';
@@ -28,6 +31,51 @@ import { getTransientSideChatModelActivity, getTransientSideChatPinnedResponseHe
 
 suite('TransientSideChatWidget', () => {
 	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
+
+	class RecordingNotificationService extends TestNotificationService {
+		readonly errors: string[] = [];
+
+		override error(error: string | Error) {
+			this.errors.push(error instanceof Error ? error.message : error);
+			return super.error(error);
+		}
+	}
+
+	function createWidget(options: {
+		chatService: IChatService;
+		transientSideChatService: ITransientSideChatService;
+		notificationService?: INotificationService;
+	}): TransientSideChatWidget {
+		const instantiationService = disposables.add(new TestInstantiationService());
+		instantiationService.stub(IContextKeyService, disposables.add(new MockContextKeyService()));
+		instantiationService.stub(IChatService, options.chatService);
+		instantiationService.stub(ITransientSideChatService, options.transientSideChatService);
+		instantiationService.stub(ILogService, new NullLogService());
+		instantiationService.stub(INotificationService, options.notificationService ?? new TestNotificationService());
+		instantiationService.stub(IHoverService, upcastPartial<IHoverService>({
+			setupManagedHover: () => ({
+				dispose: () => undefined,
+				show: () => undefined,
+				hide: () => undefined,
+				update: () => undefined,
+			}),
+		}));
+
+		const document = dom.getActiveDocument();
+		const composer = dom.append(document.body, dom.$('.source-composer'));
+		disposables.add(toDisposable(() => composer.remove()));
+		const persistentContent = dom.append(composer, dom.$('.source-persistent-content'));
+		const sourceEditor = dom.append(composer, dom.$('.source-editor'));
+		const sourceWidget = {
+			inputEditor: upcastPartial<ICodeEditor>({
+				getDomNode: () => sourceEditor,
+				hasTextFocus: () => false,
+			}),
+			inputPart: { hasActiveToolConfirmationCarousel: false },
+			focusInput: () => undefined,
+		};
+		return disposables.add(instantiationService.createInstance(TransientSideChatWidget, persistentContent, sourceWidget));
+	}
 
 	test('explains how to continue from visible input-needed and error states', () => {
 		const needsInput = getTransientSideChatPresentation(SessionStatus.NeedsInput);
@@ -150,11 +198,67 @@ suite('TransientSideChatWidget', () => {
 		});
 	});
 
+	test('marks the current card failed when its chat model is unavailable', async () => {
+		const failures: string[] = [];
+		const resources = [URI.parse('test:///missing-model'), URI.parse('test:///rejected-model')];
+		const loads = [
+			async () => undefined,
+			async () => { throw new Error('load failed'); },
+		];
+
+		for (let index = 0; index < loads.length; index++) {
+			const markedFailed = new DeferredPromise<string>();
+			const widget = createWidget({
+				chatService: upcastPartial<IChatService>({ acquireOrLoadSession: loads[index] }),
+				transientSideChatService: upcastPartial<ITransientSideChatService>({
+					states: constObservable([]),
+					markFailed: resource => markedFailed.complete(resource.toString()),
+				}),
+			});
+			const nestedWidget = upcastPartial<ChatWidget>({
+				getInput: () => '',
+				setModel: () => undefined,
+				setVisible: () => undefined,
+				dispose: () => undefined,
+			});
+			(Reflect.get(widget, '_widget') as { value: ChatWidget | undefined }).value = nestedWidget;
+			const state = upcastPartial<ITransientSideChatState>({
+				sideChat: upcastPartial<IChat>({ resource: resources[index] }),
+			});
+
+			(Reflect.get(widget, '_ensureSideModel') as (state: ITransientSideChatState) => void).call(widget, state);
+			failures.push(await markedFailed.p);
+		}
+
+		assert.deepStrictEqual(failures, resources.map(resource => resource.toString()));
+	});
+
+	test('notifies when promotion to a full chat fails', async () => {
+		const notificationService = new RecordingNotificationService();
+		const sourceChat = upcastPartial<IChat>({ resource: URI.parse('test:///source') });
+		const widget = createWidget({
+			chatService: upcastPartial<IChatService>({}),
+			transientSideChatService: upcastPartial<ITransientSideChatService>({
+				states: constObservable([]),
+				registerHost: () => toDisposable(() => undefined),
+				removeBySideChat: () => undefined,
+				promote: async () => { throw new Error('open failed'); },
+			}),
+			notificationService,
+		});
+		widget.setSource(sourceChat, upcastPartial<ISession>({ sessionId: 'session' }));
+
+		await (Reflect.get(widget, '_promote') as () => Promise<void>).call(widget);
+
+		assert.deepStrictEqual(notificationService.errors, ['The side question could not be opened as a full chat.']);
+	});
+
 	test('dismissal leaves the source composer mounted and no residual pill', () => {
 		const instantiationService = disposables.add(new TestInstantiationService());
 		instantiationService.stub(IContextKeyService, disposables.add(new MockContextKeyService()));
 		instantiationService.stub(IChatService, upcastPartial<IChatService>({}));
 		instantiationService.stub(ILogService, new NullLogService());
+		instantiationService.stub(INotificationService, new TestNotificationService());
 		instantiationService.stub(IHoverService, upcastPartial<IHoverService>({
 			setupManagedHover: () => ({
 				dispose: () => undefined,
@@ -208,7 +312,7 @@ suite('TransientSideChatWidget', () => {
 			sideChat,
 			question: 'What changed?',
 			promoting: false,
-			sendFailed: false,
+			failed: false,
 			replacedExisting: false,
 		};
 		states.set([state], undefined);
@@ -222,7 +326,7 @@ suite('TransientSideChatWidget', () => {
 		const progressUsesShimmer = !!progress?.querySelector('.transient-side-chat-progress-label') && !progress.querySelector('.codicon');
 		sideChatDescription.set(new MarkdownString('Starting MCP servers'), undefined);
 		const progressActivity = progress?.querySelector('.transient-side-chat-progress-label')?.textContent;
-		states.set([{ ...state, sendFailed: true }], undefined);
+		states.set([{ ...state, failed: true }], undefined);
 		const progressHiddenAfterFailure = persistentContent.querySelector('.transient-side-chat-progress')?.classList.contains('hidden');
 		const pinnedLayoutCalls: [number, number][] = [];
 		const nestedWidget = upcastPartial<ChatWidget>({

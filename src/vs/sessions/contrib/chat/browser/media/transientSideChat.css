@@ -106,7 +106,6 @@
 	display: flex;
 	align-items: center;
 	min-width: 0;
-	min-width: 0;
 	box-sizing: border-box;
 	padding: var(--vscode-spacing-size100) var(--vscode-spacing-size240);
 	border-top: var(--vscode-strokeThickness) solid color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
@@ -120,10 +119,6 @@
 }
 
 .transient-side-chat-progress-label {
-	min-width: 0;
-	overflow: hidden;
-	white-space: nowrap;
-	text-overflow: ellipsis;
 	min-width: 0;
 	overflow: hidden;
 	white-space: nowrap;

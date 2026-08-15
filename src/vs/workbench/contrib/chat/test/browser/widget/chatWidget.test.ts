@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
-import { DeferredPromise } from '../../../../../../base/common/async.js';
+import { DeferredPromise, timeout } from '../../../../../../base/common/async.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { OffsetRange } from '../../../../../../editor/common/core/ranges/offsetRange.js';
@@ -18,6 +18,7 @@ import { ChatSendResult, ChatSendResultSent, IChatSendRequestData } from '../../
 import { ChatAgentLocation, ChatConfiguration } from '../../../common/constants.js';
 import { ChatRequestSlashCommandPart, ChatRequestTextPart, IParsedChatRequest } from '../../../common/requestParser/chatParserTypes.js';
 import { observePromptTimelineHostWidth } from '../../../browser/promptTimeline/promptTimelineWidgetContrib.js';
+import { observeChatInputHiddenLayoutState } from '../../../browser/widget/input/chatInputPart.js';
 
 suite('ChatWidget', () => {
 
@@ -138,7 +139,7 @@ suite('ChatWidget', () => {
 		]);
 	});
 
-	test('hidden input stays out of layout unless persistent content is visible', () => {
+	test('hidden input stays out of layout unless persistent content is visible', async () => {
 		const workbench = document.createElement('div');
 		workbench.className = 'agent-sessions-workbench';
 		const sessionsPart = document.createElement('div');
@@ -168,17 +169,22 @@ suite('ChatWidget', () => {
 		sessionsPart.append(session);
 		workbench.append(sessionsPart);
 		document.body.append(workbench);
+		const inputVisibility = store.add(observeChatInputHiddenLayoutState(input, persistentContent, toolConfirmation));
+		const compactInputVisibility = store.add(observeChatInputHiddenLayoutState(compactInput, compactPersistentContent, compactToolConfirmation));
 
 		try {
 			const getDisplay = () => session.ownerDocument.defaultView?.getComputedStyle(input).display;
 			const emptyDisplay = getDisplay();
 			const compactEmptyDisplay = session.ownerDocument.defaultView?.getComputedStyle(compactInput).display;
 			toolConfirmation.removeAttribute('aria-hidden');
+			await timeout(0);
 			const confirmationDisplay = getDisplay();
 			toolConfirmation.setAttribute('aria-hidden', 'true');
 			persistentContent.append(document.createElement('div'));
+			await timeout(0);
 			const persistentContentDisplay = getDisplay();
 			compactPersistentContent.append(document.createElement('div'));
+			await timeout(0);
 			const compactPersistentContentDisplay = session.ownerDocument.defaultView?.getComputedStyle(compactInput).display;
 
 			assert.deepStrictEqual({
@@ -195,6 +201,8 @@ suite('ChatWidget', () => {
 				compactPersistentContentDisplay: 'flex',
 			});
 		} finally {
+			inputVisibility.dispose();
+			compactInputVisibility.dispose();
 			workbench.remove();
 		}
 	});

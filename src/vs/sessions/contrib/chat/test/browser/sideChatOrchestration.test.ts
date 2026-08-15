@@ -45,7 +45,7 @@ suite('SideChatOrchestration', () => {
 				calls.push(`show:${source.resource.toString()}:${side.resource.toString()}:${question}`);
 				return presentedTransiently;
 			},
-			markSendFailed: sideChat => calls.push(`failed:${sideChat.toString()}`),
+			markFailed: sideChat => calls.push(`failed:${sideChat.toString()}`),
 		});
 		return { managementService, sessionsService, sessionsPartService, transientService, calls, sendOptions: () => sendOptions };
 	}

@@ -72,7 +72,7 @@ export async function sendSideChat(
 		});
 	} catch (error) {
 		if (presentedTransiently) {
-			transientSideChatService.markSendFailed(sideChat.resource);
+			transientSideChatService.markFailed(sideChat.resource);
 		}
 		throw error;
 	}

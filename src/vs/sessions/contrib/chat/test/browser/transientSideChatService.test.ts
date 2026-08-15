@@ -166,14 +166,14 @@ suite('TransientSideChatService', () => {
 		disposables.add(service.registerHost(sourceChat.resource));
 		await service.show(session, sourceChat, sideChat, 'question');
 
-		service.markSendFailed(sideChat.resource);
+		service.markFailed(sideChat.resource);
 
 		assert.deepStrictEqual(service.states.get().map(state => ({
 			sideChat: state.sideChat.resource.toString(),
-			sendFailed: state.sendFailed,
+			failed: state.failed,
 		})), [{
 			sideChat: sideChat.resource.toString(),
-			sendFailed: true,
+			failed: true,
 		}]);
 	});
 

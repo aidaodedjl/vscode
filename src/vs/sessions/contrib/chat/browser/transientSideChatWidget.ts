@@ -24,6 +24,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { getDefaultHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegateFactory.js';
 import { EDITOR_DRAG_AND_DROP_BACKGROUND } from '../../../../workbench/common/theme.js';
 import { setModelPreservingInputTypedWhileLoading } from '../../../../workbench/contrib/chat/browser/chat.js';
@@ -224,6 +225,7 @@ export class TransientSideChatWidget extends Disposable {
 		@IChatService private readonly _chatService: IChatService,
 		@ITransientSideChatService private readonly _transientSideChatService: ITransientSideChatService,
 		@ILogService private readonly _logService: ILogService,
+		@INotificationService private readonly _notificationService: INotificationService,
 		@IHoverService hoverService: IHoverService,
 	) {
 		super();
@@ -412,7 +414,7 @@ export class TransientSideChatWidget extends Disposable {
 
 		this._questionText.textContent = state.question;
 
-		const status = state.sendFailed ? SessionStatus.Error : state.sideChat.status.read(reader);
+		const status = state.failed ? SessionStatus.Error : state.sideChat.status.read(reader);
 		const activity = state.sideChat.description.read(reader);
 		this._chatActivity = (activity && renderAsPlaintext(activity).trim()) || '';
 		this._updateProgressLabel();
@@ -459,8 +461,13 @@ export class TransientSideChatWidget extends Disposable {
 		this._loadCts.value = cts;
 		const inputBeforeLoad = widget.getInput();
 		void this._chatService.acquireOrLoadSession(resource, ChatAgentLocation.Chat, cts.token, 'TransientSideChatWidget').then(ref => {
-			if (cts.token.isCancellationRequested || !ref || !isEqual(this._currentSideChatResource, resource)) {
+			if (cts.token.isCancellationRequested || !isEqual(this._currentSideChatResource, resource)) {
 				ref?.dispose();
+				return;
+			}
+			if (!ref) {
+				this._logService.error(`[TransientSideChatWidget] No chat model available for ${resource.toString()}`);
+				this._transientSideChatService.markFailed(resource);
 				return;
 			}
 			this._modelRef.value = ref;
@@ -478,9 +485,11 @@ export class TransientSideChatWidget extends Disposable {
 				this.layout(this._lastLayout.height, this._lastLayout.width);
 			}
 		}, error => {
-			if (!cts.token.isCancellationRequested) {
-				this._logService.error('[TransientSideChatWidget] Failed to load chat model', error);
+			if (cts.token.isCancellationRequested || !isEqual(this._currentSideChatResource, resource)) {
+				return;
 			}
+			this._logService.error('[TransientSideChatWidget] Failed to load chat model', error);
+			this._transientSideChatService.markFailed(resource);
 		});
 	}
 
@@ -540,7 +549,7 @@ export class TransientSideChatWidget extends Disposable {
 			this._setProgressVisible(false);
 			return;
 		}
-		const currentStatus = status ?? (state.sendFailed ? SessionStatus.Error : state.sideChat.status.get());
+		const currentStatus = status ?? (state.failed ? SessionStatus.Error : state.sideChat.status.get());
 		if (hasTransientSideChatCompletedFinalResponse(this._widget.value, state.sideChat.resource)) {
 			this._waitingForFinalResponse = false;
 		}
@@ -599,6 +608,9 @@ export class TransientSideChatWidget extends Disposable {
 			announceStatus(localize('transientSideChat.promotedStatus', "Opened side question as a full chat"));
 		} catch (error) {
 			this._logService.error('[TransientSideChatWidget] Failed to open full chat', error);
+			const message = localize('transientSideChat.promoteFailed', "The side question could not be opened as a full chat.");
+			this._notificationService.error(message);
+			announceStatus(message);
 		}
 	}
 

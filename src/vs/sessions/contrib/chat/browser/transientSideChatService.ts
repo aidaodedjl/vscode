@@ -17,7 +17,7 @@ export interface ITransientSideChatState {
 	readonly sideChat: IChat;
 	readonly question: string;
 	readonly promoting: boolean;
-	readonly sendFailed: boolean;
+	readonly failed: boolean;
 	readonly replacedExisting: boolean;
 }
 
@@ -29,7 +29,7 @@ export interface ITransientSideChatService {
 	registerHost(sourceChat: URI): IDisposable;
 	show(session: ISession, sourceChat: IChat, sideChat: IChat, question: string): Promise<boolean>;
 	promote(sourceChat: URI): Promise<void>;
-	markSendFailed(sideChat: URI): void;
+	markFailed(sideChat: URI): void;
 	removeBySideChat(sideChat: URI): void;
 }
 
@@ -89,7 +89,7 @@ export class TransientSideChatService extends Disposable implements ITransientSi
 			sideChat,
 			question,
 			promoting: false,
-			sendFailed: false,
+			failed: false,
 			replacedExisting,
 		});
 		return true;
@@ -118,11 +118,11 @@ export class TransientSideChatService extends Disposable implements ITransientSi
 		}
 	}
 
-	markSendFailed(sideChat: URI): void {
+	markFailed(sideChat: URI): void {
 		const key = sideChat.toString();
 		const state = this._states.get().find(candidate => candidate.sideChat.resource.toString() === key);
-		if (state && !state.sendFailed) {
-			this._setState({ ...state, sendFailed: true });
+		if (state && !state.failed) {
+			this._setState({ ...state, failed: true });
 		}
 	}
 
